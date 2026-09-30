@@ -1,0 +1,1866 @@
+2026-09-30  Passage a MicroPython 1.29, sur un vrai fork
+-----------------------------------------------------
+Nouveau depot : ~/Downloads/github/atari-upython, clone de
+micropython/micropython, branche atari-port posee sur le tag v1.29.0.
+L'ancien depot (v1.28, copie du port Amiga, sans lien git avec l'amont)
+n'est pas modifie et reste en archive.
+Report des modifications du coeur par fusion a trois voies (v1.28 amont /
+notre 1.28 / v1.29) : 18 fichiers, AUCUN conflit. Seule adaptation :
+py/mkrules.mk lit desormais LIBS et non LIB (edition de liens sans -lm).
+Laisses derriere : ports/amiga, README_AMIGA, et les ~15 "AMIGA FIX: force
+heap iter" du coeur, inutiles en REPR_B. Nouveau test ITERTEST.PY pour le
+prouver (13/13).
+Binaire : 543 Ko (541 Ko en 1.28).
+Tests sous Hatari (TT 68030, EmuTOS) : SMOKE, FSTEST, OSTEST 6/6, PFTEST,
+GCTEST, ITERTEST 13/13, VIPERTEST 28/28, NATTEST 7/7, GEMTEST 18/18,
+WINTEST 17/17, MENUTEST 10/10 ; STE 68020 : SNDTEST 12/12, HWTEST ;
+PFTEST sous TOS 2.06. Pas encore teste sur le STE.
+
+2026-09-30  Deux binaires : MPY20.TTP (68020+) et MPY00.TTP (68000)
+----------------------------------------------------------------
+make produit build/MPY20.TTP, make CPU=68000 produit
+build-68000/MPY00.TTP (-m68000, 549 Ko). L'ancien nom MPY.TTP disparait.
+- Les movec (CACR) sont ecrits en .word : l'assembleur du build 68000
+  refuse le mnemonique. Ils ne sont executes que si _CPU >= 20 ; sur 68000
+  le rapport de demarrage dit "I-cache none" et -C est ignore.
+- BOGUE CORRIGE : le controle "il faut un 68020" n'avait jamais marche.
+  Il appelait get_cookie(), compile en 68020 (extb.l) : sur un 68000,
+  "Panic: Illegal Instruction" au lieu du message. Le controle est
+  maintenant dans cpucheck.c, toujours compile en -m68000 et appele en
+  tete de main(). Verifie sous Hatari : message, puis retour au bureau.
+- MPYRUN.PRG choisit MPY20.TTP ou MPY00.TTP d'apres _CPU (puis l'ancien
+  MPY.TTP). Les outils passent en -m68000. Choix non reteste sous Hatari.
+- sys.implementation._machine : "Atari with M68000" pour MPY00.
+MPY00 sous Hatari, ST 68000 a 8 MHz, 4 Mo, EmuTOS : SMOKE, FSTEST,
+GCTEST, ITERTEST 13/13, VIPERTEST 28/28, NATTEST 7/7, GEMTEST 18/18,
+WINTEST 17/17, MENUTEST 10/10 ; PFTEST sous TOS 2.06 (STE 68000). Charge
+a une adresse 4n+2 (ST-RAM) sans probleme. Vitesse (VIPERTEST, 20000
+tours) : Python 13635 ms, native 6235 ms, viper 535 ms. Avec 1 Mo de
+RAM : refus propre, il faut 2 Mo. Pas encore teste sur un vrai 68000.
+
+2026-09-29  CACHEON devient un projet a part
+----------------------------------------
+tools/cacheon.c et sa regle de Makefile.tools quittent upython pour
+~/Documents/Dev/Atari/cache (source, Makefile autonome, README et
+ChangeLog reprenant tout l'historique d'ici et de STinG, binaire valide).
+Il sert a toute la machine, pas qu'a MicroPython. Binaire recompile la-bas
+identique a l'octet pres a celui en service (a2fb5c6c). Les commentaires
+d'upython qui le citent (atari_mphal.c, mpconfigport.h, README) renvoient
+vers ../cache. Le projet STinG le compilait depuis la source d'upython : a
+faire pointer vers ../cache.
+
+2026-09-29  Detection d'EmuTOS corrigee
+-----------------------------------
+L'ancienne detection cherchait la chaine "EmuTOS" dans les 8 premiers Ko
+de la ROM ; EmuTOS 1.4 y echappait, sur le STE comme sous Hatari : dans
+l'image de 1 Mo, la chaine apparait pour la premiere fois a l'octet 30186.
+Nouveau critere : EmuTOS ecrit "ETOS" dans le long a +0x2C de son en-tete
+systeme (p_rsv2, laisse a 0 par TOS). Verifie sur les images : EmuTOS 1 Mo
+multilingue et EmuTOS 512 Ko FR portent 45544F53, TOS 2.06 et TOS 4.04
+portent 0. La recherche de chaine reste en secours pour un vieil EmuTOS
+sans ce marqueur.
+PFTEST sous Hatari : EmuTOS 1 Mo (TT) et 512 Ko FR (STE) reconnus, TOS 2.06
+inchange. SMOKE sans regression.
+
+2026-09-29  Ralentissement explique : STinG, pas le code
+----------------------------------------------------
+BENCH.PY sur le STE, 68020 a 24 MHz, EmuTOS 1.4, ajout des residents un a
+un. Boucle vide, 20000 tours, avec MPY.TTP actuel :
+  CACHEON + alt-RAM seuls        4410 ms   reference
+  + NVDI                         4415 ms   +0,1 %
+  + pile USB                     4415 ms   +0,1 %
+  + STinG charge, sans IP        4590 ms   +4,1 %
+  + STinG, IP configuree         4915 ms   +11,5 %
+Boucle arithmetique et tableau : memes pourcentages a 0,1 point pres,
+signature d'un temps vole sous interruption. STinG avec une IP consomme
+donc ~10 % du processeur en tache de fond (remonte au projet STinG).
+La veille, meme binaire sous TOS 2.06 : 291 us/tour (+32 %), activite
+reseau probablement plus forte.
+
+Bissection sur la machine, meme session, sans rien de charge :
+  MPY_A (21/09) 4320 ms (216 us/tour), MPY_B (avant emetteurs) 4325 ms,
+  MPY actuel 4410 ms. Pas de regression ; les emetteurs natifs coutent
+  2 %. Sous EmuTOS et TOS 2.06 : memes chiffres.
+
+Confirme aussi sur la machine : la detection d'EmuTOS echoue (EmuTOS 1.4,
+ROM du 06/07/2025, annonce "EmuTOS False"). A corriger.
+
+2026-09-29  BENCH.PY identifie le systeme ; defaut de detection d'EmuTOS
+---------------------------------------------------------------------
+BENCH.PY affiche desormais le systeme, uname, la couche multitache, la
+version et la date de la ROM, et la version du binaire (sys.version), en
+try pour rester compatible avec les anciens binaires de la bissection.
+
+DEFAUT TROUVE en le verifiant : sous Hatari, EmuTOS 1.4 (image de 512 Ko,
+TT) est annonce "TOS 2.06" par platform.system(). La detection cherche la
+chaine "EmuTOS" dans les 8 premiers Ko de la ROM ; elle marchait sur le
+STE, pas avec cette image. A corriger. La date de la ROM, elle, tranche :
+06/07/2025 pour cet EmuTOS, 11/14/1991 pour TOS 2.06.
+
+2026-09-29  Ralentissement : CACHEON innocente, bissection en cours
+-------------------------------------------------------------
+BENCH.PY sur le STE, TOS 2.06, 24 MHz, deux passages par cas :
+                     MPY.TTP (alt-RAM)    MPY_STR.TTP (code en ST-RAM)
+  CACHEON (vidage)       291 us/tour           642 us/tour
+  CACHEOLD (sans)        290 us/tour           640 us/tour
+- Le vidage du cache a chaque appel systeme ne coute rien de mesurable.
+- Le code en ST-RAM est 2,2 fois plus lent qu'en alt-RAM (bus partage
+  avec la video, cache de 256 octets trop petit pour l'interpreteur).
+- Mais 291 us contre 216 le 21/09 : +35 %, uniforme sur les trois
+  mesures (boucle arithmetique 690 contre 510, tableau 854 contre 634).
+
+Bissection sous Hatari (STE 68020, TOS 2.06, 8 MHz, ST-RAM), trois
+versions reconstruites depuis l'historique :
+  09e1b2c (21/09)                    506 us/tour
+  b4190a8 (avant emetteurs natifs)   507 us/tour
+  aujourd'hui (emetteurs actifs)     527 us/tour
+Les emetteurs natifs coutent ~4 %, rien d'autre n'a bouge. Les 35 % ne
+se reproduisent pas sous Hatari : soit la vitesse du processeur n'etait
+pas celle qu'on croyait le 21/09, soit c'est un effet du vrai materiel
+(alt-RAM TwiSTer, cache de 256 octets sensible a la disposition du code).
+Les trois binaires sont livres pour une mesure sur la machine, dans la
+meme session et au meme reglage.
+
+2026-09-28  Phase 9 validee sur le STE ; CACHEON limite aux 68020/030
+-------------------------------------------------------------------
+STE + TwiSTer, 68020, cache d'instructions actif (CACR 00000001),
+programme et tas en alt-RAM, TOS 2.06, 68020 a 24 MHz :
+  VIPERTEST.PY  28 sur 28. 20000 tours : Python 6330 ms, native 2550 ms
+                (x2,5), viper 140 ms (x45).
+  NATTEST.PY    7 sur 7 : le code natif precompile sur le Mac par le
+                mpy-cross REPR_B tourne sur la machine.
+
+tools/cacheon.c : modification faite depuis le projet STinG (CACHEON reste
+resident et vide le cache d'instructions a chaque appel GEMDOS, AES/VDI,
+BIOS et XBIOS, XBRA "CFLU" ; contre les bombes au chargement des CPX),
+relue et validee : superviseur, seul d0 touche et restaure, pile intacte,
+chaine XBRA conforme. Complementaire du vidage de MP_PLAT_COMMIT_EXEC, qui
+reste necessaire (une fonction viper peut etre generee puis executee sans
+appel systeme entre les deux).
+Correction ajoutee : CACHEON se limite aux 68020 et 68030. Il acceptait
+_CPU >= 20, donc aussi 68040/060, dont le CACR a une autre disposition
+(IE en bit 15, bits 0 et 3 reserves) et dont les caches se vident par
+cpusha : il y aurait ecrit des bits reserves et "vide" rien.
+Sous MagiC : lance avant MAGXBOOT, CACHEON active bien le cache, mais ses
+crochets sont probablement ecrases par les gestionnaires de MagiC ; a le
+relancer depuis l'AUTOEXEC.BAT de MagiC pour avoir aussi le vidage (son
+message dira s'il reinstalle ou trouve les crochets deja en place).
+
+2026-09-28  Phase 9 : emetteurs natif, viper et asm_m68k
+-----------------------------------------------------
+Emetteur m68k repris du port X68000 (Yuichi Nakamura, base v1.25). Les
+changements du fork ont ete isoles par git diff contre son parent
+v1.25.0 officiel (942a8fc49^2), en ecartant le Shift-JIS. Adaptations a la
+v1.28 : ASM_ENTRY a trois arguments, nouvelle macro ASM_CLR_REG,
+detection d'architecture par __m68k__ dans persistentcode.h, et
+MP_NATIVE_ARCH_M68K place APRES RV64IMC (tables de compile.c comprises).
+La table du nombre d'arguments des fonctions d'execution est identique a
+celle de l'emetteur x86 de la v1.28 : rien n'a bouge dans l'enumeration.
+
+Choix propres au port :
+- NLR par setjmp, comme le reste du port. La v1.28 sait faire du code
+  natif sur setjmp (N_NLR_SETJMP, comme xtensawin). NLR_BUF_IDX_LOCAL_1
+  vaut 2 + 3, d'apres le jmp_buf de la MiNTlib lu dans mintlib/setjmp.S
+  (d4 au mot 3). Valide par les exceptions en boucle de VIPERTEST.
+- Vidage du cache d'instructions par MP_PLAT_COMMIT_EXEC. HONNETETE : le
+  test prevu pour le prouver passe aussi sans vidage sous Hatari (build
+  experimental dans /tmp) ; il ne prouve donc rien sur ce point.
+
+Trois defauts du port X68000, trouves par VIPERTEST et corriges. Pour les
+deux premiers, j'ai d'abord garde le code du fork tel quel pour que le
+test MONTRE l'erreur avant de corriger :
+- comparaisons non signees : CC et CS inverses ("3 < 3" vrai) ;
+- une comparaison valait 0xFF (scc) au lieu de 1 : neg.b ajoute ;
+- chargements 8 et 16 bits a signe etendu : ptr8 rendait -128..127
+  (-512 pour la somme de 4 x range(256)). ld16_reg_reg_ofst sert aussi a
+  lire les numeros de qstr : au-dela de 32767, ils auraient ete faux.
+
+mpy-cross -march=m68k : code natif precompile. Premier essai : le module se
+charge, puis "TypeError: int + str". Cause : le code natif fige l'encodage
+des constantes, qui depend de la representation d'objets ; mpy-cross est en
+REPR_A, le port en REPR_B. Un mpy-cross construit en REPR_B donne 7 sur 7.
+D'ou "make mpy-cross-atari" (mpy-cross/build-atari/) et "make natmod", et
+le mpy-cross ordinaire REFUSE desormais -march=m68k avec un message, un
+module faux qui se charge sans erreur etant le pire des cas. Les autres
+architectures sont inchangees (x64, x86, armv7m, xtensa, rv32imc
+verifies) : seule la m68k definit ASM_CALL_IND_N, donc l'aide a la
+multiplication ne touche qu'elle. README corrige : il affirmait que REPR_B
+etait transparent pour l'emetteur, ce n'est vrai que compile sur l'Atari.
+
+Resultats sous Hatari : VIPERTEST 28 sur 28 (TT 68030, STE 68020 TOS
+2.06), NATTEST 7 sur 7 (TT et STE). STE 68020 a 8 MHz, 20000 tours :
+Python 12 020 ms, native 4 155 ms, viper 205 ms. Non-regression : SMOKE,
+GCTEST. Binaire : +39 Ko.
+
+2026-09-28  Menus valides sur le STE : phase 6 complete
+---------------------------------------------------
+MENUTEST.PY lance par MPYRUN, programme et tas en alt-RAM (donc TOS 2.06 ou
+EmuTOS, a preciser) : 10 sur 10. A la souris, Fabrice a choisi Options >
+Son, Fichier > Ouvrir, Options > Couleurs, le "A propos" du menu bureau,
+puis Fichier > Quitter : cinq MN_SELECTED, les quatre rappels dans l'ordre,
+et la main rendue a Quitter.
+
+2026-09-28  Phase 6 : barre de menus GEM (gem.Menu, app.menu)
+---------------------------------------------------------
+L'arbre d'objets du menu est construit en Python, dans un bytearray :
+racine, barre, zone active, titres, ecran, menus deroulants et entrees,
+24 octets par objet, les chaines a la suite dans le meme bloc. L'AES lit et
+modifie cet arbre tant que le menu est affiche ; le GC de MicroPython ne
+deplacant jamais un objet, son adresse reste valable. Deux aides en C
+seulement : _gem.addressof (adresse d'un tampon) et _gem.to_st (UTF-8 vers
+jeu ST). menu_bar, menu_icheck, menu_ienable et menu_tnormal passent par
+le _gem.aes() generique. App.run() traite MN_SELECTED (rappel, puis titre
+remis en normal) et tourne tant qu'un menu est affiche, meme sans fenetre.
+
+Le premier menu porte "A propos" et six places pour les accessoires. Elles
+sont necessaires : sous TOS 2.06, l'AES a retaille ce menu de 8 lignes
+construites a une seule (aucun accessoire charge sous Hatari) -- il ecrit
+donc bien dans l'arbre.
+
+tests/MENUTEST.PY, 10 verifications : rappels (dont le menu bureau), titre
+remis en normal, coche posee et retiree, entree grisee et reactivee,
+libelle inconnu refuse, sortie par Fichier > Quitter. 10 sur 10 sous
+Hatari sur TT, STE mono TOS 2.06 et STE mono EmuTOS. Geometrie verifiee
+aussi par objc_draw de chaque menu deroulant et captures d'ecran : textes,
+separateur, coche et entree grisee corrects. Non-regression : WINTEST
+17/17 (STE mono, les deux TOS), GEMTEST 18/18.
+
+2026-09-28  CACHEON : vidage du cache d'instructions a chaque appel systeme
+------------------------------------------------
+(Fait depuis le projet STinG.) CACHEON.PRG reste desormais resident et
+s'accroche en XBRA "CFLU" aux traps 1, 2, 13 et 14 : chaque appel GEMDOS,
+AES/VDI, BIOS ou XBIOS vide le cache d'instructions (CACR bit 3). TOS 2.06
+ignore le cache du 68020 ; COPS chargeant les CPX l'un apres l'autre au
+demarrage executait des lignes perimees (4 bombes sur le STE, cache actif).
+Tout chargeur lit le nouveau code par GEMDOS apres la derniere execution de
+l'ancien : le vidage tombe toujours entre les deux. Sortie sans stdio.
+Verifie sous Hatari ST 68020 (TOS 2.06 : demarrage, COPS, CPX) ; Hatari ne
+reproduit pas le plantage, a confirmer sur le STE. Ne pas basculer la
+TwiSTer en 68000 sans redemarrer (movec dans les hooks).
+
+2026-09-28  Demarrage sans autotest valide sur le STE
+------------------------------------------------
+STE + TwiSTer, programme et tas en alt-RAM, MPY.TTP -t TINY.PY, depuis
+l'entree dans main :
+                           8 MHz     24 MHz
+  calibration + options    205 ms    170 ms
+  allocation du tas         95 ms     60 ms
+  mp_init et VFS           270 ms    155 ms
+  total                    570 ms    385 ms   (8 MHz : 1,5 s avant)
+Plus de ligne "autotest du tas". -H fonctionne. SMOKE.PY passe en entier
+sans la mise a zero du tas (20000 tours de boucle vide : 6065 ms, soit
+303 us/tour -- vitesse du processeur non precisee pour ce releve).
+Ce qui reste : la calibration (100 ms de mesure par construction) et le
+rapport de demarrage affiche a l'ecran, compte dans "mp_init et VFS" ;
+la console TOS est lente, surtout a 8 MHz.
+
+2026-09-28  Demarrage : 2,3 s -> 0,25 s ; autotest du tas sur option -H
+-------------------------------------------------------------------
+Fabrice a rejoue le scenario sous EmuTOS et TOS 2.06 : apres plein ecran
+puis retour, la fenetre se deplace normalement. Le blocage signale n'est
+plus reproductible ; point clos.
+
+Sur sa demande :
+- l'autotest du tas (ecriture puis relecture de tout le Mo : 1,2 s a
+  8 MHz sur le STE) n'est plus fait qu'avec la nouvelle option -H ;
+- la mise a zero du tas au demarrage est supprimee. Elle ne servait a
+  rien : le GC remet chaque bloc a zero en l'allouant
+  (MICROPY_GC_CONSERVATIVE_CLEAR, py/gc.c).
+Hatari, STE 68020 a 8 MHz, TOS 2.06, depuis l'entree dans main : 2,3 s ->
+0,25 s. Le rapport de demarrage (report_memory) se compte desormais dans
+l'etape "mp_init et VFS", d'ou ses 110 ms.
+
+Non-regression sous Hatari, avec GCTEST en tete puisqu'on touche au tas :
+GCTEST OK sur TT et STE, SMOKE 19 ok, FSTEST 25 ok, OSTEST force 8/8,
+SNDTEST 12/12, GEMTEST 18/18 et WINTEST 17/17 en STE mono.
+
+2026-09-28  WINTEST 17/17 sous EmuTOS ; demarrage mesure sur le STE
+----------------------------------------------------------------
+WINTEST, EmuTOS 1.4, mono, par MPYRUN : 17 sur 17, dont les deux controles
+ajoutes (fenetre au premier plan et WM_MOVED applique apres plein ecran et
+retour). Trace a la main : MOVED, SIZED, REDRAW, FULLED, REDRAW, FULLED,
+REDRAW, CLOSED -- aucun MOVED apres le retour a la taille normale. Soit le
+deplacement n'a pas ete tente, soit l'AES d'EmuTOS ne l'a pas transmis ; a
+demander a Fabrice. Notre cote est hors de cause (controles ci-dessus).
+
+MPY.TTP -t TINY.PY, STE + TwiSTer, 68020 a 8 MHz, programme et tas en
+alt-RAM :
+  calibration + options      135 ms
+  allocation du tas           55 ms
+  memset du tas              165 ms
+  autotest du tas           1160 ms
+  mp_init et VFS              20 ms
+Autotest et memset : 1,3 s sur 1,5 s.
+
+2026-09-26  Fichiers a tester dans ~/Downloads/ToTest/UPYTHON/
+---------------------------------------------------------
+A la demande de Fabrice, pour simplifier les transferts vers l'Atari : les
+fichiers a tester quittent ToTest/ du depot pour ~/Downloads/ToTest/UPYTHON/,
+consignes dans ~/Downloads/ToTest/todo_upython.txt. Le dossier est partage
+avec les autres projets Atari. Le depot a ete renomme atari-upython ->
+upython lors d'une reorganisation de ~/Documents/Dev/Atari.
+
+2026-09-25  WINTEST avec trace, EmuTOS et MagiC : 15 sur 15
+--------------------------------------------------------
+Lances par MPYRUN.PRG, mono. Traces des messages recus a la main :
+  EmuTOS  MOVED, SIZED, REDRAW, FULLED, REDRAW, CLOSED
+  MagiC   MOVED x5, SIZED, REDRAW, SIZED, REDRAW, FULLED, REDRAW, CLOSED
+Deplacement, redimensionnement et plein ecran fonctionnent sur les deux.
+Dans les deux cas la fenetre a ete fermee DEPUIS le plein ecran : le
+scenario du blocage signale sous EmuTOS (plein ecran, retour, puis
+deplacement) n'a pas ete rejoue ; il reste ni reproduit ni ecarte.
+Copies de WINTEST anterieures aux deux controles ajoutes (15 et non 17).
+Le REPL demarre en deux a trois secondes sur le STE (Fabrice).
+
+2026-09-25  Option -t : duree du demarrage, etape par etape
+-------------------------------------------------------
+Question de Fabrice : les quelques secondes d'attente au lancement sont-
+elles incompressibles ? Mesure sous Hatari, STE 68020 a 8 MHz, tas en
+ST-RAM :
+  chargement (avant main)     15 ms   (non significatif : Hatari lit a
+                                        la vitesse du Mac)
+  calibration + options      120 ms
+  allocation du tas           20 ms
+  memset du tas              290 ms
+  autotest du tas           1765 ms
+  mp_init et VFS              35 ms
+L'autotest du tas (ecriture puis relecture de tout le Mo) et le memset
+font 90 % du temps. Ni l'un ni l'autre n'est necessaire : le GC remet
+chaque bloc a zero en l'allouant (MICROPY_GC_CONSERVATIVE_CLEAR, verifie
+dans py/gc.c), et l'autotest ne servait qu'a la chasse au probleme
+d'alignement, resolu depuis. Pas encore retires : decision de Fabrice.
+RUNTEST.PRG note l'heure avant le Pexec (RUNTEST.T0), ce qui permet a -t
+de mesurer aussi le chargement.
+
+2026-09-24  Fenetre bloquee apres plein ecran : c'etait sous EmuTOS
+---------------------------------------------------------------
+Correction de Fabrice : le blocage signale plus tot s'est produit sous
+EmuTOS 1.4, pas sous TOS 2.06.
+
+MagiC, nouvelle version de WINTEST, 14 sur 14 : la trace montre deux
+FULLED (plein ecran puis retour) suivis de huit MOVED, puis CLOSED. Sous
+MagiC, la fenetre se deplace normalement apres un plein ecran.
+
+EmuTOS : le journal recu venait encore de l'ancienne version (sans trace).
+
+WINTEST verifie desormais, apres plein ecran et retour, que la fenetre
+est toujours au premier plan (WF_TOP) et qu'un WM_MOVED est encore
+applique. Sous Hatari, EmuTOS et TOS 2.06 en mono : 17 sur 17. Si le
+glisser echoue encore sur la machine, c'est que l'AES n'envoie plus
+WM_MOVED ; la trace le dira.
+
+2026-09-24  WINTEST sous MagiC : 14 sur 14
+-------------------------------------
+Lance par MPYRUN.PRG sous MagiC, mono 640 x 400 : toutes les verifications
+automatiques passent -- redessin, recouvrement, fermeture par message,
+deplacement, plein ecran et retour. Journal produit par l'ANCIENNE version
+de WINTEST (sans la trace des messages AES) : il ne renseigne pas encore
+sur la fenetre qui ne se deplace plus apres plein ecran sous TOS 2.06.
+Programme et tas toujours en ST-RAM sous MagiC : l'alt-RAM n'y est
+toujours pas vue.
+
+2026-09-24  WINTEST sur le STE : carres sous la souris, trace des messages
+----------------------------------------------------------------------
+Releves de Fabrice, TOS 2.06, mono 640 x 400, lance par MPYRUN.PRG :
+GEMTEST 18 sur 18. WINTEST 13 sur 14 : WM_MOVED a pose la fenetre a
+y = 62 pour 59 demande. L'AES ajuste, c'est son droit ; tolerance de
+8 pixels.
+
+Deux glitches signales :
+1. En bougeant la souris, des carres du bureau (avec ses icones)
+   apparaissaient sous le pointeur ; le reste de l'ecran etait gris.
+   Le gris sans icones est le comportement normal de TOS mono-tache
+   pendant qu'une application tourne. Les carres, eux, sont la copie
+   que le pointeur garde de ce qu'il recouvre, prise avant que le bureau
+   n'efface l'ecran au lancement ; il les restitue en bougeant.
+   Reproduit sous Hatari (un carre gris dans la fenetre, a cote du
+   pointeur). gem.App fait desormais, au demarrage, souris cachee,
+   form_dial(FMD_FINISH) sur tout le bureau, souris remontree.
+   FAUSSE PISTE ecartee d'abord : un graf_mouse(M_ON) en trop dans
+   App.__init__, soupconne de desequilibrer le compteur de masquage.
+   Un test deterministe (peindre en noir sous le pointeur cache, puis
+   relire ce qu'il restitue) a montre que non, sous TOS 2.06 comme
+   EmuTOS : 0 pixel faux sur 64 avec ou sans. Rien n'a ete change sur
+   cette base.
+2. Apres avoir agrandi puis remis la fenetre a sa taille, impossible de
+   la deplacer. Non reproductible sous Hatari, qui ne sait pas faire
+   glisser la souris. WINTEST journalise desormais chaque message AES
+   recu pendant la phase manuelle (app.trace) : le prochain releve dira
+   si l'AES envoie WM_MOVED.
+
+2026-09-23  MPYRUN.PRG : un lanceur GEM qui marche sur tous les bureaux
+-----------------------------------------------------------------
+MagiC refuse les .GTP -- rien sur cette extension dans ses sources, c'est
+une convention du bureau de TOS 2.x. Un .PRG, lui, est lance en mode GEM
+partout. tools/mpyrun.c : appl_init, selecteur de fichiers sur *.PY dans
+le dossier courant, Dsetdrv/Dsetpath vers le dossier du script choisi,
+puis Pexec de MPY.TTP avec -q -l <script>.LOG <script>, et une alerte
+avec le code de retour. appl_exit avant le Pexec et appl_init apres : sous
+un AES mono-tache, le fils a besoin de la place d'application.
+
+Valide sous Hatari de bout en bout (selecteur pilote au clavier depuis le
+Mac, puis verification du journal produit) sur STE sous EmuTOS 1.4 et sous
+TOS 2.06.
+
+hatari-test.sh : AUTOPRG= pour demarrer autre chose que RUNTEST.PRG, et
+HCMDS="delai:commande;..." pour envoyer des touches depuis le Mac a des
+instants donnes -- le seul moyen de piloter ce qui tourne avant tout
+script Python.
+
+Trois pieges rencontres, aucun dans MPYRUN :
+- PRGFLAGS 0x07 (chargement en RAM alternative) empechait MPYRUN de
+  demarrer ; 0x01 comme les autres outils.
+- TOS 2.06 exige MACHINE=ste sous Hatari, sinon Hatari refuse l'image.
+- le scan code 52 donne "." sous EmuTOS mais ":" sur l'AZERTY de
+  TOS 2.06 : la saisie automatique du nom echouait. Validation faite avec
+  un nom sans point.
+Reste inexplique : sous EmuTOS sur TT, --auto sur MPYRUN.PRG fige le
+demarrage (RUNTEST.PRG passe). Sur STE, tout va bien.
+
+2026-09-23  Fenetres validees sur le STE ; deux fautes dans mes tests
+------------------------------------------------------------------
+STE + TwiSTer, 640 x 400, lance en .GTP depuis le bureau avec -q : toutes
+les verifications automatiques passent sous TOS 2.06 comme sous EmuTOS
+1.4. WINTEST : redessin, recouvrement par une seconde fenetre, fermeture
+par message, deplacement, plein ecran et retour, la main rendue a la
+fermeture. GEMTEST : dessin, alerte, selecteur (rendu
+I:\HD\PYTHON\GEMTEST.PY). Le passage en .GTP regle bien le probleme de
+souris et d'affichage du .TTP.
+
+Les deux seuls echecs venaient des tests :
+- GEMTEST exigeait la touche "a" ; wait_key avait pourtant bien fonctionne
+  (0x1c0d = Return sous EmuTOS, 0x3920 = espace sous TOS 2.06). A la main,
+  n'importe quelle touche convient desormais.
+- WINTEST ne recevait aucune touche : avec -q, la consigne "tape une
+  touche" n'etait affichee NULLE PART. Les consignes passent maintenant
+  par l'interface -- ligne d'info de la fenetre, texte de l'alerte, titre
+  du selecteur -- et l'etape clavier manuelle est facultative.
+
+Non-regression sous Hatari : GEMTEST 18/18 et WINTEST 15/15 sur TT et sur
+STE mono, EmuTOS et TOS 2.06.
+
+2026-09-22  Lancement GEM : .GTP et option -q
+---------------------------------------------
+Fabrice a essaye WINTEST.PY sous EmuTOS en lancant MPY.TTP depuis le
+bureau : fenetres recouvertes par le texte de la console, souris sans
+effet, clavier correct. Ce n'est pas le code des fenetres. TOS bascule
+l'ecran en mode texte pour un programme TOS et ne lui confie pas la
+souris. Sous Hatari, MPY est lance par RUNTEST.PRG, un programme GEM,
+d'ou l'ecart. Remede : copier le binaire en MPY.GTP -- le bureau demande
+les parametres comme pour un .TTP mais lance en mode GEM.
+
+Nouvelle option -q : plus rien a l'ecran, tout dans le journal (-l). Sans
+elle, le moindre print() s'inscrit sur le dessin, console et fenetres
+partageant l'ecran.
+
+Les options se donnent desormais dans N'IMPORTE QUEL ORDRE : elles
+etaient testees dans une sequence figee, et "-l X.LOG -q" aurait ignore
+le -q en silence. Boucle unique, avec message et usage sur option
+inconnue.
+
+WINTEST 15/15, GEMTEST 18/18 et SMOKE inchanges avec et sans -q.
+
+2026-09-22  Phase 6 : fenetres GEM et boucle d'evenements (gem.App)
+---------------------------------------------------------------
+modgem.c : evnt_multi, appl_write et wind_set_str, les trois appels qui
+passent a l'AES une adresse devant rester valide (tampon de message, titre
+d'une fenetre relu a chaque redessin du cadre : un tampon par fenetre et
+par champ, garde en C). gem.py : les primitives de dessin passent dans une
+classe Canvas partagee par Screen et les fenetres ; nouvelles classes App
+(station VDI, boucle d'evenements) et Window.
+
+tests/WINTEST.PY, 15 verifications : le test s'envoie a lui-meme les
+messages de l'AES (redessin, deplacement, plein ecran, fermeture) et en
+verifie l'effet au pixel, recouvrement par une seconde fenetre compris.
+15 sur 15 sous Hatari : TT EmuTOS, STE couleur EmuTOS, STE mono TOS 2.06 et
+EmuTOS. Aucun plantage sous EmuTOS sur STE : evnt_multi n'a pas le probleme
+d'evnt_keybd.
+
+Deux fautes a moi, trouvees par le test :
+- wind_create recoit la taille MAXIMALE de la fenetre, celle du plein
+  ecran ; je lui donnais la taille initiale, et WM_FULLED ne grandissait
+  pas. Window cree desormais avec la surface du bureau.
+- un point de test tombait dans la barre de titre de la seconde fenetre et
+  non dans sa zone de travail.
+Et une du banc d'essai : en avance rapide, un STE sous Hatari fait passer
+~10 s emulees par seconde reelle ; une attente de 3 s ratait la touche. Le
+test attend la touche, plus une duree.
+
+MagiC : l'alt-RAM n'etait toujours pas vue. Lu dans les sources
+(kernel/inc/auto.s) : une fois demarre, MagiC reexecute lui-meme TOUT le
+dossier AUTO, dans l'ordre physique du repertoire (Fsfirst/Fsnext), sauf
+si \AUTO\AUTOEXEC.BAT existe, auquel cas il n'execute que lui. Et il recopie
+le cookie jar de TOS (bot_coo_cp_loop). Journal de demarrage possible :
+section #[boot], ligne log=<fichier> dans MAGX.INF (allg/read_inf.s).
+
+2026-09-22  Phase 6 (VDI, alertes, selecteur) validee sur le STE
+------------------------------------------------------------
+GEMTEST.PY, 18 sur 18, STE + TwiSTer en monochrome 640 x 400, lance depuis
+le bureau, sur les trois systemes :
+  TOS 2.06     AES 0x0320, handle VDI 3, programme et tas en alt-RAM
+  EmuTOS 1.4   AES 0x0320, handle VDI 3, programme et tas en alt-RAM
+  MagiC        AES 0x0399, handle VDI 4, programme et tas en ST-RAM
+Alerte, selecteur de fichiers (chemin rendu : D:\AAA\PYTHON\GEMTEST.PY)
+et wait_key (0x1061) passent partout. EmuTOS encre moins de pixels dans
+l'echantillon de texte (106 contre 159) : sa police systeme differe, le
+test ne demande que plus de 20.
+Sous EmuTOS sur la vraie machine, rien du blocage d'evnt_keybd vu sous
+Hatari -- mais wait_key n'y passe plus, donc cela ne prouve rien sur ce
+point.
+
+2026-09-21  Phase 6 : module gem (VDI, alertes, selecteur de fichiers)
+-------------------------------------------------------------------
+modgem.c (_gem) sur la gemlib de la MiNTlib (-lgem, deja fournie par la
+toolchain, 5 Ko au binaire) et modules/gem.py gele : gem.Screen (station
+de travail virtuelle, primitives de dessin, relecture de pixel), gem.alert,
+gem.fileselect, gem.wait_key. Details et API dans le README.
+
+tests/GEMTEST.PY, 18 verifications, 18 sur 18 sous Hatari sur TT EmuTOS,
+STE couleur (EmuTOS et TOS 2.06) et STE mono 640 x 400 (TOS 2.06). Le
+dessin se verifie seul, par v_get_pixel ; les captures d'ecran confirment.
+
+En chemin :
+- La console et le VDI partagent l'ecran : les resultats affiches PENDANT
+  le dessin etaient relus par v_get_pixel ("cercle plein" en echec). Le
+  test differe ses affichages. Coordonnees relatives a la taille de
+  l'ecran : a 320 x 200 mes cercles a x = 330 et 420 sortaient de l'ecran
+  et revenaient par la gauche.
+- Le guet du Ctrl-C prend la touche qu'il trouve et la garde pour input() :
+  l'AES ne la voit plus. Touches de test donc envoyees une fois le dialogue
+  affiche ; gem.wait_key sert d'abord la touche mise de cote
+  (atari_take_pending_char, nouveau dans atari_mphal.c).
+- NameError sur une globale bien definie, en STE mono sous EmuTOS, juste
+  apres wait_key. FAUSSE PISTE d'abord : j'ai soupconne l'alignement du
+  pool du GC ; tests/GCTEST.PY a montre que non (gc_init aligne deja la fin
+  du tas, py/gc.c:235) -- rien n'a ete modifie sur cette base. Le
+  diagnostic par elimination (appl_init seul, alert, wait_key ; TT contre
+  STE ; EmuTOS contre TOS 2.06) a designe evnt_keybd, sous EmuTOS sur STE
+  uniquement. wait_key passe desormais par GEMDOS (Crawcin), comme input().
+  Cause non etablie ; prudence avec _gem.aes(20, ...).
+- GCTEST.PY reste : il verifie que des objets gardes survivent a des
+  collectes forcees.
+
+hatari-test.sh : relais C:\HATARI.CMD -> --cmd-fifo (touches, captures ;
+un ecrivain par commande, Hatari n'aimant pas un fifo garde ouvert),
+MONITOR=, EXTRA=, captures dans /tmp/mpy-shots.
+
+2026-09-21  Vitesse : pas de regression, c'etait le mode 8 MHz
+----------------------------------------------------------
+BENCH.PY sur le STE a 16 MHz, TOS 2.06, I-cache actif, binaire de 485 Ko :
+  boucle vide      216 us/tour   (meilleure valeur d'avant : 216)
+  boucle arithm.   510 us/tour
+  ecriture tableau 634 us/octet
+Les 503 us du 21/09 venaient du mode 8 MHz, comme Hatari le laissait
+prevoir. Le correctif strcmp n'a rien coute en vitesse.
+
+MagiC : OSTEST.PY force et PFTEST.PY passent (version de MagiC lue dans les
+AESVARS, alt-RAM vue avec ALTRAMON lance apres MAGXBOOT).
+
+2026-09-21  Phase 5 validee sur le STE ; MagiC : OSTEST corrige, version lue
+------------------------------------------------------------------------
+STE + TwiSTer, TOS 2.06, binaire de 485 Ko, programme et tas en alt-RAM :
+  SNDTEST.PY   12 sur 12. Premier son DMA sur la vraie machine ; 935 ms
+               mesurees pour une seconde, 500 ms en stereo.
+  DISKTEST.PY  10 sur 10 sur la partition IDE. Secteurs logiques de
+               8192 octets, FAT16, 30508 clusters, secteur de boot
+               amorcable (somme 0x1234). Dernier secteur n. 61034 lu par
+               la forme longue de Rwabs, sur le vrai pilote IDE.
+  SMOKE.PY     complet.
+
+MagiC : tout passe sauf OSTEST.PY, EACCES sur uos.remove("FORCE.TMP").
+Faute du test : open("FORCE.TMP").read() laissait le fichier ouvert
+(MicroPython ne compte pas les references, un fichier non ferme le reste
+jusqu'au GC), puis le test l'effacait. TOS le laisse faire, MagiC refuse.
+Relecture par "with".
+
+platform.release() sous MagiC : lit la vraie version via le cookie MagX ->
+AESVARS (magic $87654321 verifie en +0, date en +16, version en +48, etat
+en +50). uname().release donnait "2.00", l'en-tete TOS que MagiC imite.
+La date est JJMMAAAA en BCD : aesmain.s assemble D_BCD_DDMMYYYY, contre le
+commentaire "mmddyyyy" de ostruct.h -- le code assemble fait foi. MagX est
+aussi teste avant MiNT dans system() et multitasking(). Non eprouve : pas
+de MagiC sous Hatari.
+
+VITESSE, en suspens : SMOKE a donne 503 us/tour sur le STE, contre 216 a
+248 mesures auparavant. Sous Hatari, STE 68020 a 8 MHz, meme config :
+ancien binaire (2,4 Mo, reconstruit depuis fa3d24a dans /tmp) 495 us,
+nouveau 523 us ; SMOKE et BENCH y font jeu egal (10,8 s contre 10,5 s).
+Donc pas de regression imputable au correctif strcmp, et la machine
+tournait comme un 68020 a 8 MHz. Fabrice pense avoir ete en 8 MHz au lieu
+de 16. A confirmer par BENCH.PY a 16 MHz.
+
+Outillage : hatari-test.sh met ses temporaires dans /tmp et accepte BIN=.
+Nouveau dossier ToTest/ (non versionne) pour ce qui est a essayer sur la
+machine.
+
+2026-09-19  Son DMA et disque valides sous Hatari, sur un vrai disque BIOS
+-----------------------------------------------------------------------
+Tous les tests passent avec le binaire de 485 Ko :
+  FSTEST.PY            complet
+  OSTEST.PY force      8 sur 8
+  SNDTEST.PY           TT 12 sur 12, STE 68020 sans TT-RAM 11 sur 11
+                       (le garde-fou hors ST-RAM n'a pas d'objet quand
+                       le tas est deja en ST-RAM ; le test le dit)
+  DISKTEST.PY          10 sur 10 sur une image ACSI de 64 Mo
+
+DEFAUT CORRIGE : machine.Mediach rendait tel quel un code d'erreur BIOS
+(-15, EUNDEV, sur le disque GEMDOS emule) au lieu de lever OSError.
+
+DISQUE, EPROUVE POUR DE VRAI : le disque GEMDOS emule de Hatari n'a pas de
+peripherique BIOS, Getbpb y repond ENODEV. hatari-test.sh accepte donc
+ACSI=image, montee en C: par les pilotes ACSI d'EmuTOS (le tos.img de
+Hatari), le disque GEMDOS passant en D:. RUNTEST.PRG cherche desormais
+lui-meme le lecteur qui porte RUNTEST.ARG. Verifications croisees avec
+une source independante, newfs_msdos cote Mac : nombre de clusters,
+taille des clusters, FAT16, et secteur de boot "BSD  4.4" relus a
+l'identique. Pour la forme longue de Rwabs (secteur > 32767), image de
+64 Mo et marqueur "MPY-DERNIER-SECTEUR-OK!!" pose cote Mac au secteur
+131064 : relu tel quel.
+
+SNDTEST.PY : le tampon se remplit en repetant UNE periode, par affectation
+de tranche de longueur exacte (le tampon ST-RAM est pris par reference,
+il ne doit pas etre redimensionne). 225 ms sur un STE a 8 MHz, contre
+plusieurs dizaines de secondes pour la boucle par echantillon, qui
+depassait le budget de temps du test sous Hatari.
+
+2026-09-18  Phase 5 terminee (son DMA, disque) ; binaire divise par 5
+------------------------------------------------------------------
+
+BINAIRE : 2,38 Mo -> 485 Ko (texte 2,27 Mo -> 467 Ko). Le defaut datait du
+premier build. MicroPython compresse ses messages d'erreur : a chaque
+MP_ERROR_TEXT, MP_COMPRESSED_ROM_TEXT (py/misc.h) deroule un arbre de
+strcmp() sur les 210 messages, que gcc est cense reduire a une constante.
+string.h de la MiNTlib definit strcmp et strlen en asm volatile des que
+__OPTIMIZE__ est defini ; gcc ne peut rien replier a travers de l'asm, et
+chaque site gardait l'arbre entier en vraies boucles octet par octet --
+snd_check_hardware, trois lignes de C, pesait 7,6 Ko. Decouvert parce que
+machine_sound.o faisait 47 Ko. Correctif : __builtin_strcmp dans
+MP_MATCH_COMPRESSED, une ligne dans py/misc.h, commentee. SMOKE.PY passe
+en entier avec le nouveau binaire, messages d'erreur compris.
+Consequence : le port tient en ST-RAM sur toute machine de 2 Mo, avec ou
+sans RAM alternative.
+
+SON DMA (machine_sound.c) : machine.stram, dmaplay, dmapos, dmastop, par
+les registres $FF8900 (TOS 2.06 n'a pas d'appel XBIOS pour le son). Les
+puces DMA ne voient que la ST-RAM : tampon refuse au-dessus de phystop,
+avec renvoi a stram(). Tampon garde en racine du GC pendant la lecture ;
+son coupe par main() a la sortie. _SND bit 1 verifie. tests/SNDTEST.PY :
+12 sur 12 sous Hatari (TT) -- 990 ms mesures pour 1 s a 25 kHz, 500 ms
+en stereo, arrondi des taux, boucle et arret.
+
+DISQUE (machine_disk.c) : Getbpb, Mediach, disk_read, LECTURE SEULE. Tampon
+intermediaire en ST-RAM (DMA disquette), forme longue de Rwabs au-dela du
+secteur 32767, 64 Ko maximum par appel. Erreurs BIOS ajoutees a la table
+de modatarios.c. tests/DISKTEST.PY ecrit, pas encore execute.
+
+OUTILLAGE : hatari-test.sh + tools/runtest.c (RUNTEST.PRG) pour executer un
+test sous Hatari sans intervention et en relire le journal. --auto ne
+passe pas d'argument, d'ou le lanceur ; --addr24 off evite une boite de
+dialogue bloquante ; perl/alarm remplace timeout(1), absent de macOS.
+
+MAGIC : MPY.TTP ne demarrait pas faute de memoire. L'ancien binaire (2,4 Mo
++ 1 Mo de tas) ne tenait pas en ST-RAM, et l'alt-RAM n'etait pas vue :
+MAGXBOOT fixe fstrm_beg a $01000000 en dur (magxboot.s:153), alors que la
+TwiSTer place son alt-RAM sous cette adresse ; magibios.s:1939 saute alors
+sa declaration. Fabrice a trouve le remede : lancer ALTRAMON.PRG apres
+MAGXBOOT, pour que son Maddalt arrive a MagiC. FORCETST.TTP passe ses
+quatre etapes sous MagiC.
+
+2026-09-18  Redirection validee sous TOS 2.06 seul
+-----------------------------------------------
+Releves de Fabrice, TOS 2.06 + ALTRAMON.PRG, sans Geneva ni Teradesk,
+programme et tas en RAM alternative, I-cache actif.
+
+- FORCETST.TTP : etapes 1 a 4 sans bombe.
+- MPY.TTP OSTEST.PY : 6 reussites sur 6 (redirection sautee).
+- MPY.TTP OSTEST.PY force : 8 reussites sur 8. "CECI VA DANS LE
+  FICHIER" relu dans FORCE.TMP, affichage revenu a l'ecran ensuite.
+- utime : 1990-06-15 12:30:00 demande, relu a l'identique, ecart 0 s.
+- Sortie propre, "[exit] status=0" dans les deux journaux.
+
+Conclusion prudente : os.redirect() fonctionne sous TOS 2.06. Les deux
+plantages des 15 et 16/09 ont eu lieu sous Geneva + Teradesk, ce qui
+fait de Geneva le suspect designe, sans le prouver : il faudrait
+FORCETST sous Geneva. On ne sait pas non plus si l'ancienne sequence,
+Fclose de la poignee sauvee compris, passerait sous TOS seul -- on ne
+la reessaie pas, ne pas fermer suffit.
+
+Fabrice envisage de passer a MagiC plutot que Geneva. Son Fforce, lu
+dans kernel/dos/magidos.s, compte les references : la redirection y a
+de bonnes chances de marcher telle quelle, a verifier.
+
+2026-09-17  Sources MiNTlib : une hypothese tombe, et je corrige mon aplomb
+--------------------------------------------------------------------------
+Fabrice a mis les sources de la MiNTlib dans ~/Downloads/github/atari-mintlib.
+Elles tranchent, et pas dans le sens que j'annoncais.
+
+ETABLI, et cela clot l'hypothese b) d'hier : unix/open.c rend directement
+la valeur de Fopen(). Les descripteurs de la MiNTlib SONT des poignees
+GEMDOS, donc fileno() est un argument parfaitement legitime pour Fforce,
+et ce n'etait pas la cause. Verifie aussi que notre chemin de sortie
+n'y est pour rien : mp_hal_stdout_tx_strn ecrit par Fwrite(1, ...) brut,
+sans passer par la MiNTlib, et son tampon de conversion est correctement
+borne.
+
+CORRECTION DE CE QUE J'AI AFFIRME LE 16/09 : j'ai presente comme etabli
+que fermer la poignee sauvee apres Fforce etait fatal sous TOS. C'etait
+trop affirmatif. posix/system.c et stdio/popen.c de la MiNTlib font
+exactement cette sequence, Fclose compris, donc elle n'est pas
+universellement fausse. Le redemarrage du 15/09 est un fait, mais mon
+explication n'en etait pas toute la cause -- la preuve, les bombes du
+16/09 sont survenues sans ce Fclose. On garde le parti prudent (ne pas
+fermer) parce que c'est le cote sur d'une question non tranchee, pas
+parce que la question serait tranchee.
+
+INDICE NOUVEAU : unix/dup2.c de la MiNTlib porte "use with caution,
+TOS 1.4 still has double re-direction bug!". TOS a des antecedents sur
+cette fonction precise.
+
+Restent donc deux pistes, que la soiree de Fabrice separera : TOS
+lui-meme, ou Geneva qui virtualise GEMDOS par-dessus -- les deux
+plantages ont eu lieu sous Geneva/Teradesk.
+
+tools/forcetst.c, modatarios.c, modules/os.py et le README portent
+desormais cet etat des lieux au lieu de ma certitude d'hier.
+
+2026-09-17  Fforce plante encore : sonde FORCETST.TTP, redirection isolee
+------------------------------------------------------------------------
+Retrait du Fclose n'a pas suffi. OSTEST.PY plante toujours au meme
+endroit : trois bombes avec MPY.TTP, deux avec MPY_STR.TTP. Deux et
+trois bombes sont les vecteurs 2 et 3, erreur de bus et erreur
+d'adresse, et le fait que le numero change avec la RAM ou tourne le
+programme sent le pointeur fou.
+
+Je ne devine plus. Deux hypotheses restent en presence et Python ne
+permet pas de les departager :
+  a) Fforce est inutilisable tel quel sur cette machine ;
+  b) les descripteurs rendus par open() de la MiNTlib ne sont pas des
+     poignees GEMDOS, auquel cas Fforce recoit un numero qui ne designe
+     rien -- ce qui collerait avec une erreur de bus.
+
+Ajout de tools/forcetst.c -> build/FORCETST.TTP, qui refait la sequence
+en C pur, sans MicroPython, en affichant chaque valeur AVANT de s'en
+servir :
+  FORCETST 1   Fdup(1) seul
+  FORCETST 2   Fdup + Fforce aller-retour, sans ecrire entre les deux
+  FORCETST 3   idem avec une ecriture pendant la redirection
+  FORCETST 4   compare la numerotation de Fcreate et celle de open()
+L'etape 4 tranche l'hypothese b) a elle seule. Aucune etape ne ferme la
+poignee sauvee.
+
+tests/OSTEST.PY : la redirection ne s'execute plus que sur demande
+(argument "force"), pour que le reste du test soit utilisable sans
+risquer la machine. Les imports remontent en tete de fichier, ce qui
+ecarte au passage l'import de os comme suspect.
+
+2026-09-16  CORRECTION : Fclose apres Fforce fait redemarrer la machine
+--------------------------------------------------------------------
+OSTEST.PY, ecrit hier, a fait redemarrer le STE. Le bug etait dans mon
+test, et l'idiome que j'avais mis dans les commentaires et le README
+etait faux lui aussi.
+
+Sequence fautive :
+    sauve = uos.dup(1)
+    uos.force(1, sortie.fileno())
+    ...
+    uos.force(1, sauve)
+    uos.close(sauve)        <-- ici
+Fabrice a retrouve "CECI VA DANS LE FICHIER" dans FORCE.TMP apres le
+redemarrage, donc l'ecriture redirigee avait bien abouti : la machine
+est tombee juste apres, au premier affichage suivant.
+
+Cause : sous TOS et EmuTOS, Fforce ne prend pas de reference. Apres
+Fforce(1, sauve), la poignee standard 1 et sauve designent le MEME
+descripteur ; Fclose(sauve) le libere, la poignee 1 pointe dans le vide
+et le premier Fwrite(1, ...) qui suit emporte le systeme.
+
+Trois sources concordent, verifiees dans les arbres locaux :
+- ~/Downloads/github/atari-magic-thotto/test/dostest/dupbug.c : le test
+  de non-regression de th.otto pour ce cas precis, dont le Fclose est
+  explicitement commente ;
+- kernel/dos/magidos.s, D_Fforce : "Unterschiede zur Original-Routine",
+  MagiC ajoute justement le comptage de references que TOS n'a pas ;
+- FreeMiNT sys/dosfile.c, sys_f_force : fp->links++.
+
+Correction :
+- os.py gagne un gestionnaire de contexte os.redirect(std, cible), qui
+  sauve, redirige, remet en place et ne ferme JAMAIS la poignee sauvee.
+  Sous MiNT et MagiC cela laisse filer une reference par redirection,
+  sans consequence a cette echelle, et preferable au plantage.
+- tests/OSTEST.PY passe par os.redirect.
+- Le commentaire de modatarios.c et le README portent l'avertissement
+  au lieu de l'idiome faux.
+- os.dup, os.force et os.close restent exposes : os.close est bon pour
+  une poignee qu'on a ouverte soi-meme et pas forcee sur une poignee
+  standard.
+
+Les deux binaires sont reconstruits.
+
+2026-09-15  GEMDOS complete : utime, dup/force/close, putenv/unsetenv
+--------------------------------------------------------------------
+Les trois derniers manques de la phase 5 cote GEMDOS, dans
+modatarios.c. os.py les reexporte sans rien changer (from uos import *).
+
+- os.utime(chemin, (atime, mtime)) -- Fdatime. GEMDOS ne garde qu'une
+  date par fichier, donc seul mtime est honore ; sans second argument,
+  c'est l'heure courante. Fdatime exige une poignee ouverte : on tente
+  Fopen en lecture/ecriture puis en lecture seule, certaines versions de
+  TOS refusant d'horodater une poignee ouverte en lecture seule.
+  Attention a la granularite de deux secondes du format.
+
+- os.dup / os.force / os.close -- Fdup, Fforce, Fclose. C'est ce qui
+  rend os.system() vraiment utile : un fils GEMDOS herite des poignees
+  standard de son pere, donc detourner la poignee 1 le temps de l'appel
+  redirige la sortie du programme lance. Fforce n'est pas dup2 : il fait
+  pointer la poignee STANDARD Hstd vers ce que designe Hnew.
+
+- os.putenv / os.unsetenv -- setenv/unsetenv de la MiNTlib. Cela
+  n'affecte que notre processus et ses fils ; GEMDOS n'a aucun moyen de
+  rendre quoi que ce soit au shell.
+
+Ajout au passage d'un helper str_arg() : meme conversion de jeu de
+caracteres que path_arg() mais SANS reecrire '/' en '\\', parce qu'une
+valeur d'environnement n'est pas un chemin.
+
+Nouveau test tests/OSTEST.PY, qui couvre les trois. La redirection s'y
+verifie d'elle-meme : le test detourne sa propre sortie vers un fichier
+puis la remet en place ; si la remise en place echouait, la suite du
+test resterait invisible.
+
+Les deux binaires sont reconstruits (build/hd/MPY.TTP et MPY_STR.TTP).
+
+2026-09-15  Tests materiel : I2C valide, et la fenetre bloquee vient de Geneva
+------------------------------------------------------------------------
+Releves de Fabrice sur le STE + TwiSTer. Aucun changement de code.
+
+- FERMETURE DE LA FENETRE : la cause est Geneva ou Teradesk, pas le
+  port. Demarrage avec TOS seul, sans Geneva ni Teradesk : EmuCON2
+  reprend la main et MPY.TTP se ferme normalement. Le programme sortait
+  deja proprement de son cote, le journal se terminant par
+  "[exit] status=0". Point ferme, on ne cherche plus. Cela dit, le
+  passage a Cconis/Crawcin du 2026-09-14 reste justifie sur le fond :
+  lire la console physique par le BIOS ignorait la redirection du shell.
+
+- I2C : tests/I2CTEST.PY et tests/RTCTEST.PY passent sur la machine,
+  y compris la sonde nue de 0x2C. Phase 4bis validee.
+
+- HORLOGE : une seconde d'avance de GEMDOS sur le DS3231. C'est le
+  plancher du format, pas une derive : GEMDOS code les secondes sur
+  5 bits, donc par pas de deux. Rien a corriger ; RTCTEST.PY sync
+  recale GEMDOS sur le DS3231 quand l'ecart devient reel.
+
+2026-09-15  Repere : le port X68000 fournit un emetteur m68k natif/viper
+---------------------------------------------------------------------
+Etude de ~/Downloads/github/micropython-x68k (Yuichi Nakamura, base
+v1.25). Aucun changement de code ici, seulement l'analyse et sa trace.
+
+Ce port ajoute a l'amont py/asmm68k.c/.h, py/emitnm68k.c,
+py/emitinlinem68k.c et py/nlrm68k.c, soit environ 1950 lignes, plus
+une soixantaine de lignes d'accroches dans compile.c, emit.h,
+emitnative.c, mpconfig.h, nlr.h, persistentcode.h et py.mk.
+
+Verifications faites :
+- le code genere est du 68000 pur, aucune instruction 68020+ ; un seul
+  emetteur couvrira donc 68000, 68020 et 68030 ;
+- l'emetteur passe par MP_F_CONVERT_OBJ_TO_NATIVE / _NATIVE_TO_OBJ pour
+  franchir la frontiere entier/objet, donc notre MICROPY_OBJ_REPR_B ne
+  le gene pas ;
+- le port X68000 ne gere aucun cache d'instructions ; il faudra ajouter
+  une invalidation du I-cache 68020 (CACR bit 3, via Supexec) apres
+  l'assemblage de chaque fonction, sinon le code natif sera incorrect
+  sur notre machine depuis que CACHEON.PRG active le cache ;
+- MP_NATIVE_ARCH_M68K devra prendre une place apres RV64IMC : le fork
+  occupait le rang que la v1.28 attribue desormais a RV64IMC.
+
+Inscrit au README en phase 9.
+
+ChangeLog -- MicroPython Atari
+==============================
+
+2026-09-06  Phase 1 : squelette du port Atari (non compile)
+-----------------------------------------------------------
+Clone local du port Amiga, branche atari-port.
+Creation de ports/atari/ a partir de ports/amiga/.
+
+Supprimes (specifiques AmigaOS, sans equivalent ou reportes) :
+  modamigaos.c, modarexx.c, modasl.c, modintuition.c, modsocket.c,
+  modssl.c, amiga_mphal.c, main.c, modules/_ospath.py, modules/platform.py
+
+Ajoutes :
+  Makefile        CROSS_COMPILE=m68k-atari-mint-, -m68020, -O2.
+                  Plus de -noixemul ni -lsocket/-lamisslstubs.
+                  Cible supplementaire MPY.TTP (extension TOS pour que le
+                  bureau propose une ligne de commande).
+
+  mpconfigport.h  Repris de l'Amiga. Changements :
+                  - MICROPY_HEAP_SIZE 128 Ko -> 1 Mo (8 Mo d'alt-RAM
+                    disponibles sur la TwiSTer)
+                  - MICROPY_HAL_HAS_VT100 = 0 (console VT52)
+                  - hook de conversion de chemin : Latin-1 -> charset ST
+                  - MICROPY_PY_MACHINE / I2C / SOFTI2C declares a 0,
+                    a activer en phase 4bis
+                  - socket, ssl, arexx retires
+                  - MICROPY_PY_TIME_INCLUDEFILE -> ports/atari/modtime.c
+
+  mphalport.h     ticks_ms/ticks_us reels via _hz_200 (5 ms) au lieu des
+                  stubs a 0 de l'Amiga. Ajout de mp_hal_delay_us_fast() et
+                  mp_atari_calibrate_delay() pour l'I2C a venir. Primitives
+                  VT52 pour readline.
+
+  atari_mphal.c   Nouveau. Console via Bconin(2) (scancodes -> sequences
+                  ANSI attendues par readline) et Fwrite(1,...) en sortie
+                  avec insertion des CR. Table de conversion charset Atari
+                  ST <-> UTF-8 (0x80-0xBF, glyphes latins ; au-dela non
+                  mappe). Lecture de _hz_200 via Supexec. Calibration d'une
+                  boucle d'attente microseconde. Ctrl-C par scrutation de
+                  Bconstat, les touches non-Ctrl-C sont remises en file.
+                  Horloge murale via Tgetdate/Tgettime.
+
+  main.c          Nouveau. _stksize MiNTlib au lieu du __stack Amiga, plus
+                  de StackSwap. Heap alloue par Mxalloc(taille, 3) avec
+                  repli sur Malloc si TOS < 1.04. Verification du cookie
+                  _CPU au demarrage (refus si < 68020). Banniere avec le
+                  modele detecte par _MCH et les deux pools memoire.
+                  Separateurs de chemin Atari pour sys.path[0].
+
+  modtime.c       Adapte : locale.library remplacee par lecture de TZ,
+                  time()/gmtime() de la libc remplaces par mp_hal_time_ns()
+                  et timeutils, pour ne pas dependre du traitement TZ de
+                  MiNTlib.
+
+  manifest.py     Reduit a base64 + datetime pour la phase 1. Le reste est
+                  commente avec la phase qui le debloque.
+
+  README.txt      Etat du projet, plan, decisions, points a verifier.
+
+Non modifie : les trois patches upstream du port Amiga (alignement m68k,
+iter_buf en tas, hook VFS POSIX) etaient deja appliques dans le fork et
+servent a l'identique sur Atari.
+
+Non compile : le toolchain m68k-atari-mint n'est pas encore installe.
+
+Corrections trouvees par compilation de verification (compilateur hote +
+stubs GEMDOS, voir plus bas) :
+  - mpconfigport.h : ajout de <stddef.h>. Le hook de conversion de chemin
+    declare un parametre size_t alors que seul <stdint.h> etait inclus.
+    Le port Amiga a la meme faiblesse, masquee par son ordre d'inclusion.
+  - mpconfigport.h : suppression des typedefs mp_int_t / mp_uint_t. Depuis
+    la v1.28 MicroPython les derive de MP_INT_TYPE (intptr_t par defaut,
+    soit un long 32 bits sur m68k) ; les redefinir a la main est redondant
+    et provoque un conflit de typedef.
+  - modtime.c : ajout de <stdio.h> pour snprintf, qui arrivait auparavant
+    par <time.h> (retire lors du portage).
+
+Verifications effectuees sans toolchain m68k :
+  - mpy-cross compile (natif macOS).
+  - Conversion UTF-8 <-> charset Atari ST : aller-retour teste sur ASCII,
+    accents francais, ligature oe, eszett, plus les cas non mappables
+    (euro, japonais -> '?') et le chemin rapide sans copie. Tout passe.
+  - Conversion date GEMDOS -> epoch Unix : teste sur 1980-01-01,
+    2000-02-29 (bissextile seculaire), 2100-03-01 (non bissextile),
+    2024-02-29, et avec decalage horaire. Tout passe.
+  - Compilation complete du port avec le compilateur de l'hote et des
+    stubs GEMDOS : tous les fichiers C compilent et l'edition de liens
+    resout tous les symboles. Cela valide la syntaxe, les types, les
+    signatures HAL et le branchement des primitives VT52 de readline.
+    Cela ne valide evidemment NI le code genere pour m68k, NI le
+    comportement a l'execution.
+
+2026-09-07  Premiere compilation m68k reussie + elagage de lib/
+------------------------------------------------------------
+Toolchain m68k-atari-mintelf (gcc 13.4.0) installee dans /opt/cross-mint.
+Le port compile et se lie. Binaire : ports/atari/build/MPY.TTP,
+2 056 937 octets de texte, 1 640 de data, 5 910 de bss. Non execute.
+
+Corrections rendues necessaires par la vraie compilation croisee :
+  - Makefile : CROSS_COMPILE = m68k-atari-mintelf- (fork ELF), detecte
+    automatiquement dans MINT_BIN_DIR (/opt/cross-mint/bin par defaut)
+    pour ne pas dependre du PATH.
+  - Makefile : CPU_FLAGS = -m68020-60 au lieu de -m68020. C'est le nom
+    d'un multilib reel de cette toolchain (gcc -print-multi-lib) ; avec
+    -m68020 on generait du code 68020 mais on liait la libc 68000.
+  - Makefile : -std=gnu99 au lieu de -std=c99. En C99 strict la MiNTlib
+    masque off_t, et extmod/vfs_posix_file.c ne compile pas.
+  - Makefile : ajout de shared/runtime/interrupt_char.c. os_dupterm.c
+    reference mp_interrupt_char, non defini sinon (defaut de liaison).
+  - atari_mphal.c : mp_hal_stdout_tx_strn prend un size_t, pas un
+    mp_uint_t. Sur cette cible mp_uint_t vaut unsigned int et size_t
+    unsigned long : types incompatibles pour gcc. La compilation de
+    verification sur l'hote ne pouvait pas voir ce cas (LP64, les deux
+    types y coincident).
+  - Makefile : -Os par defaut (OPT_FLAGS). -O2 donnait 2 627 499 octets
+    de texte, -Os en donne 2 056 937, soit 570 Ko economises sans effet
+    mesurable sur un interpreteur de bytecode.
+  - Makefile : PRGFLAGS poses explicitement apres l'edition de liens avec
+    m68k-atari-mintelf-flags. Valeur par defaut 0x07, celle que met deja
+    l'editeur de liens. make PRGFLAGS=0x01 pour le test alt-RAM/DMA.
+
+Elagage de lib/ : le fork embarquait les SDK de tous les ports materiels
+de MicroPython, soit 1,0 Go pour un port qui n'en utilise aucun.
+Supprimes : stm32lib, btstack, nxp_driver, alif_ensemble-cmsis-dfp, fsp,
+alif-security-toolkit, asf4, mbedtls, nrfx, pico-sdk, tinyusb,
+cyw43-driver, mynewt-nimble, lwip, wiznet5k, libffi, axtls, cmsis,
+open-amp, libmetal, berkeley-db-1.xx, protobuf-c, libhydrogen,
+mbedtls_errors, arduino-lib.
+Conserves : uzlib (deflate), re1.5 (module re), crypto-algorithms
+(sha256), micropython-lib (base64 gele), libm / libm_dbl, plus oofatfs
+et littlefs -- ces deux derniers sont desactives dans la config mais
+extmod/vfs_fat.h et vfs_lfs.h incluent leurs en-tetes sans garde, donc
+la passe de generation des qstr en a besoin.
+Le depot passe de 1,2 Go a 199 Mo (dont 158 Mo de .git). Tout est
+recuperable : git checkout 7c0d1017 -- lib/<nom>.
+
+.gitignore : ports/atari/build/ et ports/atari/.build_number.
+
+2026-09-07  Premiere execution sous Hatari
+---------------------------------------------
+Premier lancement : "FATAL: uncaught NLR" avant la banniere. Outillage
+ajoute pour localiser le probleme :
+
+  main.c   nlr_jump_fail() affiche desormais l'exception elle-meme
+           (mp_obj_print_exception) au lieu de se contenter de dire
+           qu'il y en a eu une. Garde par un drapeau vm_ready, car
+           avant mp_init() il n'y a pas de runtime pour l'afficher.
+  main.c   ATARI_DEBUG_INIT : trace des etapes d'init sur la console
+           (heap + adresse + banque memoire, gc_init, mp_init, montage
+           du VFS, argv). A repasser a 0 quand le port demarrera.
+  main.c   le test d'echec d'allocation du tas devient signe :
+           Mxalloc peut rendre un code d'erreur negatif, que le test
+           "== 0" laissait passer -- on partait alors memset() sur un
+           pointeur invalide.
+  run-hatari.sh  nouveau. Machine TT par defaut (68030 + 8 Mo de
+           TT-RAM), au plus pres d'un STE+TwiSTer pour l'alt-RAM.
+           MACHINE=falcon ou MACHINE=ste CPULEVEL=2 pour les variantes.
+
+Avec run-hatari.sh (machine TT, 68030, 8 Mo de TT-RAM), le port demarre :
+tas d'1 Mo obtenu en alt-RAM a 0x121aee0, gc_init, mp_init, montage du
+VFS et argv passent tous, banniere et REPL affiches.
+
+Ajout de tests/SMOKE.PY, copie sur le disque GEMDOS par run-hatari.sh :
+entiers longs (mpz), flottants, chaines et accents, dict/set, exceptions,
+sys, gc, re, time, binascii, base64 gele, aller-retour deflate, et
+lecture d'un fichier par le VFS POSIX.
+
+Depot : historique aplati (equivalent d'un clone --depth 1), .git passe
+de 158 Mo a 7,1 Mo, le depot de 199 Mo a 62 Mo. L'historique complet
+reste dans ~/Downloads/github/amiga-upython (remote origin).
+
+2026-09-07  gcc 13 m68k miscompile MicroPython a -Os
+-------------------------------------------------------
+Cause du "FATAL: uncaught NLR" du premier lancement, et de l'echec de
+tests/SMOKE.PY : le -Os que le Makefile mettait par defaut. Ce n'etait
+pas la configuration machine, contrairement a ce que l'entree
+precedente affirmait (le meme binaire -Os demarrait une fois sur deux,
+selon l'adresse du tas -- d'ou la confusion).
+
+Symptome : tout appel de fonction invoque la mauvaise case de pile.
+  >>> print          TypeError: 'NoneType' object isn't callable
+  >>> print("A")     TypeError: 'bool' object isn't callable
+  >>> len("abc")     TypeError: 'NoneType' object isn't callable
+Le type annonce change avec ce qui traine sur la pile, ce qui designe
+le calcul de l'operande de CALL_FUNCTION (DECODE_UINT dans py/vm.c).
+
+Verification sous Hatari, meme source, trois binaires :
+  -Os                        casse
+  -Os sans computed goto     casse plus tot encore (pendant le montage
+                             du VFS, avant meme la banniere)
+  -O2                        fonctionne : print, len, appels avec
+                             arguments, REPL complet
+Ce n'est donc pas le computed goto mais bien le niveau d'optimisation.
+
+Makefile : OPT_FLAGS repasse a -O2 (2,6 Mo de texte au lieu de 2,0).
+Ajout de VM_OPT pour recompiler un seul fichier a un autre niveau, afin
+de chercher plus tard si le bug se limite a py/vm.c et de recuperer les
+570 Ko.
+
+2026-09-07  run-hatari.sh : clavier AZERTY
+--------------------------------------------
+Le Mac est en AZERTY francais (verifie dans les preferences macOS), le
+TOS emule etait en anglais et le mapping de Hatari par defaut est
+symbolique : les touches ne tombaient pas ou elles sont ecrites.
+
+  - EmuTOS passe en francais. La ROM fournie avec Hatari fait 1 Mo,
+    c'est la version multi-langues : --country sur ST/STE (pas de
+    NVRAM), --layout et --language sur TT et Falcon (NVRAM).
+  - Mapping clavier en mode "scancode" : Hatari transmet la position
+    physique de la touche et non le caractere que macOS en tire. Mac
+    AZERTY + Atari AZERTY = les touches tombent au meme endroit, y
+    compris chiffres et accents. C'est aussi le comportement de la
+    vraie machine, crochets et accolades compris (combinaisons
+    Alternate).
+  - Le type de mapping ne s'expose pas en ligne de commande, seulement
+    par fichier de configuration : le script genere build/keyboard.cfg
+    et le passe avec -c.
+  - COUNTRY et KEYMAP permettent de revenir a l'anglais/symbolique ou
+    de charger une table perso ; AUTO demarre directement un programme.
+
+2026-09-07  La vraie cause : alignement des objets sur m68k
+-------------------------------------------------------------
+CORRECTION de l'entree precedente : gcc ne miscompile rien a -Os. Le
+bug est un defaut d'alignement, que -O2 et -Os exposent simplement a
+des endroits differents.
+
+MICROPY_OBJ_REPR_A se sert des deux bits de poids faible d'un pointeur
+comme etiquette de type : 00 = pointeur, 01 = petit entier, 10 = qstr.
+Tout objet MicroPython doit donc etre aligne sur 4 octets. Or l'ABI
+m68k aligne les structures sur 2 octets seulement. Verifie a l'objdump
+sur le binaire construit :
+
+  .rodata.mp_type_bytes   ...   2**1     <-- alignement 2 octets
+
+Un objet pose a une adresse == 2 (mod 4) est donc relu comme un qstr,
+et l'interpreteur appelle ce que cet indice designe -- d'ou les
+"TypeError: 'str' / 'bool' / 'NoneType' object isn't callable" a des
+endroits qui changent selon le niveau d'optimisation, puisqu'il change
+la disposition des objets en memoire.
+
+Correction : mpconfigport.h definit
+  #define MICROPY_OBJ_BASE_ALIGNMENT __attribute__((aligned(4)))
+Le coeur applique cet attribut au champ type de mp_obj_base_t, donc a
+tout objet MicroPython. Apres reconstruction, les memes sections
+passent a 2**2. Pas -malign-int, qui changerait la disposition de
+toutes les structures partagees avec la MiNTlib.
+
+Restent alignees sur 2 octets les tables (mp_rom_map_elem_t, mp_arg_t) :
+leur contenu 32 bits y est lu non aligne, ce qu'un 68020 accepte. Une
+variante -m68000 demanderait de les aligner aussi.
+
+Le Makefile reste a -O2 le temps de valider ; MPY_OS.TTP (-Os) est
+fourni a cote pour verifier que les 570 Ko sont recuperables.
+
+2026-09-07  sys.platform : bus error
+-------------------------------------
+Les deux binaires (-O2 et -Os) passent desormais les 17 premiers tests
+de SMOKE.PY de facon identique -- l'alignement etait bien la cause, et
+-Os n'y etait pour rien. Tous deux mouraient ensuite sur une bus error
+en lisant sys.platform, a l'adresse 0.
+
+MICROPY_PY_SYS_PLATFORM est une CHAINE, pas un booleen : py/modsys.c en
+fait directement un objet str avec MP_DEFINE_STR_OBJ. Le port heritait
+du (1) de l'Amiga, d'ou un objet chaine dont le pointeur de donnees
+valait 1. Corrige en "atari". Le port Amiga a le meme defaut.
+
+Charset : les octets emis sont les bons, verifie sur l'hote avec la
+vraie table (e accent aigu -> 0x82, a grave -> 0x85, c cedille -> 0x87,
+u trema -> 0x81, eszett -> 0x9E, oe -> 0xB4). Ce que le terminal du Mac
+affiche passe par la conversion de --conout ; c'est la fenetre Hatari
+qui fait foi.
+
+2026-09-07  Phase 1 terminee : SMOKE.PY passe en entier
+----------------------------------------------------------
+Les deux binaires (-O2 et -Os) passent la totalite du test de fumee
+avec des resultats identiques : entiers longs (2**100 exact), flottants,
+chaines et f-strings, dict/set/sorted, exceptions, sys, gc, re, time
+(horloge GEMDOS a la bonne heure), binascii, base64 gele, aller-retour
+deflate (100 octets -> 15), lecture de fichier par le VFS POSIX.
+Mesure au passage : 20000 tours de boucle vide en 1370 ms sur un 68030
+emule.
+
+  - Makefile : retour a -Os par defaut. 2,0 Mo de texte au lieu de
+    2,6 Mo, comportement identique sur les 25 tests. Le commentaire qui
+    accusait -Os d'un miscompile est corrige.
+  - main.c : ATARI_DEBUG_INIT passe a 0 (les traces d'init ne servent
+    plus au demarrage normal), reactivable par
+    make COPT=-DATARI_DEBUG_INIT=1
+  - run-hatari.sh : lecteurs de disquette debranches (--drive-a off,
+    --drive-b off) et --fast-boot on. Rien ne vient de la disquette, le
+    programme est sur le disque GEMDOS ; le demarrage est plus court.
+    FLOPPY=1 les rebranche.
+
+2026-09-08  README_AMIGA.txt
+------------------------------
+Releve des defauts trouves dans ports/amiga/ pendant le portage, pour
+pouvoir les remonter en amont : sys.platform declare en booleen alors
+que c'est une chaine (plantage certain), size_t utilise sans
+<stddef.h>, typedefs mp_int_t/mp_uint_t redondants depuis la v1.28, et
+deux points a verifier sur une vraie compilation AmigaOS -- alignement
+des objets sur 4 octets (le plus important) et mp_interrupt_char absent
+du SRC_C. Rien n'est modifie dans ports/amiga/.
+
+2026-09-11  Virgule flottante logicielle (le STE n'a pas de FPU)
+------------------------------------------------------------------
+Le binaire refusait de demarrer sur le STE a TwiSTer : "il faut un
+68881". Le coupable est -m68020-60, qui n'est pas qu'un choix de jeu
+d'instructions mais selectionne aussi le multilib du meme nom, construit
+en supposant un 68881 -- et dont le demarrage MiNTlib verifie que le FPU
+est la.
+
+La toolchain ne propose que deux jeux de bibliotheques (gcc
+-print-multi-lib) : le defaut, en 68000 sans FPU, et m68020-60. Pas de
+variante 68020-sans-FPU. D'ou la separation :
+
+  CPU_FLAGS    = -m68020 -msoft-float   compilation de notre code
+  LD_CPU_FLAGS = -msoft-float           edition de liens -> multilib "."
+
+Notre code reste donc du 68020, et les bibliotheques liees sont du 68000
+sans FPU, ce qui tourne tres bien sur un 68020. Verifie apres coup :
+zero instruction FPU dans les 200+ objets (les seules occurrences que
+l'objdump signalait sont les tables de saut d'un switch dans readline,
+des donnees et non du code), et le crt0 retenu est bien celui du
+multilib par defaut.
+
+  make        -> soft float, defaut
+  make FPU=1  -> hard float (-m68020-60), pour machine equipee
+
+main.c : quand il est construit avec FPU, le binaire verifie le cookie
+_FPU au demarrage et le dit clairement, au lieu de mourir sur la
+premiere instruction F-line. La banniere indique desormais "(soft
+float)" ou "+FPU", pour savoir quel binaire on execute.
+
+run-hatari.sh : --fpu none par defaut, pour emuler une machine sans FPU
+comme le STE. FPU=68882 pour tester l'autre variante.
+
+A noter pour la suite : un Falcon030 de base n'a PAS de FPU non plus (le
+68882 est un support, presque toujours vide). La version soft float
+couvre donc aussi le Falcon ; la version FPU ne sert qu'aux machines
+equipees, dont le TT.
+
+2026-09-11  Validation sur materiel reel, et diagnostic TOS 2.06
+------------------------------------------------------------------
+MicroPython tourne sur le vrai STE + TwiSTer, sous EmuTOS 1.3 avec
+Geneva, Teradesk, USB et alt-RAM.
+
+Sous TOS 2.06 sur la meme machine, echec au demarrage :
+"TypeError: 'NoneType' object isn't callable" -- exactement la signature
+du desalignement des objets. MICROPY_OBJ_BASE_ALIGNMENT aligne les
+objets DANS le segment de texte, mais toutes les adresses d'un PRG se
+decalent avec l'adresse de chargement, et rien n'oblige GEMDOS (ni un
+driver alt-RAM tiers) a fournir un TPA aligne sur 4.
+
+main.c :
+  - sonde d'alignement (un objet const aligne sur 4) testee au
+    demarrage. Si elle tombe sur un multiple impair de 2, le programme
+    le dit et s'arrete, au lieu de se comporter comme un interprete
+    casse. Suggere la variante ST-RAM.
+  - la banniere affiche desormais l'adresse du texte et celle du tas,
+    chacune suivie de sa banque : "text at 0x... (alt-RAM), heap at
+    0x... (ST-RAM)". Repond a "en quelle RAM tourne-t-il ?".
+    L'adresse du texte vient de _base->p_tbase (MiNTlib).
+
+Variante fournie : MPY_STR.TTP, PRGFLAGS=0x01, donc chargement et
+allocations en ST-RAM uniquement -- a essayer sous TOS 2.06 si le
+desalignement vient du driver alt-RAM.
+
+2026-09-11  Matrice programme/tas : rapport memoire au demarrage
+------------------------------------------------------------------
+Essais sur le vrai STE + TwiSTer :
+
+  TOS 2.06 + TT-RAM   MPY.TTP (prog alt-RAM)  : plante 'bool'
+  TOS 2.06 + TT-RAM   MPY_STR.TTP (prog ST)   : passe (20k tours 12 s)
+  EmuTOS sans TT-RAM  MPY_STR.TTP             : passe (20k tours 6 s)
+  EmuTOS + TT-RAM     MPY.TTP                 : passe
+  EmuTOS + TT-RAM     MPY_STR.TTP             : plante 'bool'
+
+Donc ce n'est pas le systeme, ni la banque du tas seule : c'est la
+combinaison. Et la sonde d'alignement du programme n'a pas declenche,
+donc la base de chargement est bien alignee sur 4 -- le desalignement,
+s'il y en a un, est ailleurs.
+
+main.c :
+  - report_memory(), affiche AVANT mp_init() (un echec pendant l'init
+    masquait l'information) : adresses du texte, des donnees, du bss et
+    du tas, chacune avec sa banque, plus un audit d'alignement de cinq
+    adresses representatives (rodata, mp_type_str, mp_type_bool, bss,
+    tas). Toute adresse non alignee sur 4 est nommee.
+  - option -s : tas en ST-RAM meme quand l'alt-RAM est disponible. Les
+    quatre combinaisons programme/tas se testent donc avec deux
+    binaires.
+
+run-hatari.sh : TOS206=1 prend la ROM TOS 2.06 francaise telechargee
+dans le dossier Hatari. Les options de langue ne sont passees qu'a
+EmuTOS multi-langues (image >= 512 Ko) ; une vraie ROM a son pays grave.
+
+Connu, non traite : sous Geneva, fermer la fenetre du programme provoque
+un "panic exception 12xxx" en boucle. Le port n'ecoute aucun message
+AES ; c'est du ressort de la phase 4 (GEM).
+
+2026-09-11  Hatari ne reproduit pas + test memoire du tas
+-----------------------------------------------------------
+Les quatre combinaisons programme/tas passent sous Hatari (TT, EmuTOS,
+8 Mo de TT-RAM), y compris celle qui echoue sur le vrai STE (programme
+en ST-RAM, tas en alt-RAM). L'emulateur ne reproduit donc pas le
+probleme : il faut la vraie machine. Toutes les adresses relevees sont
+alignees sur 4, ce qui ecarte definitivement la piste alignement.
+
+Corrige, defaut trouve par l'essai "MPY.TTP -s" qui rendait quand meme
+un tas en alt-RAM : -s utilisait Malloc(), or avec PRGFLAGS bit 2 le
+GEMDOS a le droit d'y repondre en alt-RAM. Il utilise maintenant
+Mxalloc(taille, 0), mode ST-RAM exclusif.
+
+Ajout d'un test memoire du tas avant gc_init : chaque mot de 32 bits
+recoit sa propre adresse (XOR 0xA5A5A5A5) puis tout est relu. Un motif
+fonde sur l'adresse detecte aussi un decodage partiel ou un miroir. Si
+le tas ne rend pas ce qu'on y a ecrit, le programme le dit avec
+l'adresse fautive et s'arrete, au lieu de laisser croire a un bug de
+l'interprete. C'est la difference entre "MicroPython est casse" et "la
+RAM de la carte ne repond pas comme prevu", et rien dans les symptomes
+observes jusqu'ici ne permettait de trancher.
+
+2026-09-12  La cause, enfin : adresse de chargement impaire (x2)
+------------------------------------------------------------------
+Releves sur le vrai STE, avec TT-RAM declaree. Les cas qui plantent
+affichent tous une adresse de texte == 2 (mod 4), les cas qui marchent
+une adresse alignee sur 4 :
+
+  plante   texte 0x2a28c6, 0x2a28ba, 0x582f56   (== 2 mod 4)
+  marche   texte 0x576ff4, 0x576d88, 0xb1334    (== 0 mod 4)
+
+C'est donc bien l'alignement, et Hatari ne le montrait pas parce que
+son GEMDOS aligne toujours sur 4. Sur la vraie machine, sous Geneva,
+le TPA tombe ou il tombe.
+
+Ma sonde d'alignement du 11/09 n'avait rien vu pour une raison humiliante
+et instructive : gcc connait l'alignement declare de align_probe et
+repliait "(unsigned long)&align_probe & 3" a faux a la compilation. Le
+meme test dans report_memory(), passant par un tableau de pointeurs, y
+survivait -- d'ou un binaire qui affirmait "all 4-byte aligned" une
+ligne avant d'annoncer quatre objets desalignes. L'adresse se lit
+desormais a travers un pointeur volatile.
+
+Correction de fond : MICROPY_OBJ_REPR_B.
+REPR_A etiquette les objets dans les deux bits de poids faible et exige
+donc 4 octets d'alignement, ce qu'aucun programme GEMDOS ne peut
+garantir. REPR_B reconnait un pointeur a (o & 1) == 0 : 2 octets
+suffisent, ce que m68k et GEMDOS donnent toujours.
+
+Ce que ca coute :
+  - entiers courts sur 30 bits au lieu de 31. Au-dela, MPZ prend le
+    relais : resultats identiques, arithmetique un peu plus lente.
+  - MICROPY_PY_UCTYPES desactive : extmod/moductypes.c a une assertion
+    statique MP_SMALL_INT_BITS >= 31. Module de niche (acces brut a des
+    structures), rien d'autre n'en depend.
+  - MPY_CROSS_FLAGS += -msmall-int-bits=30, pour que les constantes des
+    modules geles soient boitees plutot que tronquees en silence.
+
+main.c : le rapport d'alignement devient informatif ("note: ... 2-byte
+aligned") au lieu d'etre fatal, puisque REPR_B s'en accommode. La sonde
+au demarrage ne verifie plus que la parite.
+
+A savoir : changer mpconfigport.h demande un make clean, genhdr/
+moduledefs.h ne suivant pas la configuration (decouvert en desactivant
+uctypes : l'edition de liens reclamait encore mp_module_uctypes).
+
+2026-09-12  La TwiSTer ne met pas sa RAM ou un TT la met
+-----------------------------------------------------------
+Les relevés du STE montrent des adresses de 0x576ff4 ou 0x7a00b4 --
+au-dela des 4 Mo qu'un STE peut avoir en ST-RAM -- toutes etiquetees
+"ST" par le rapport. C'est de la RAM alternative, mais mappee juste
+au-dessus de la ST-RAM, pas a 0x01000000 comme sur un TT, ce que le
+test IN_ALTRAM supposait.
+
+Corrige : la limite se lit maintenant dans phystop (variable systeme en
+0x42E, via Supexec), qui donne la fin reelle de la ST-RAM sur n'importe
+quelle machine. Le rapport disait donc "ST-RAM" pour des adresses de
+carte d'extension, et le tas etait probablement en RAM alternative
+depuis le debut sans qu'on le sache.
+
+2026-09-12  EmuTOS 1.4 sur le STE
+--------------------------------
+La machine d'essai est passee d'EmuTOS 1.3 a 1.4. Sans effet observe
+sur le port ; les entrees anterieures a cette date parlent donc de 1.3
+a juste titre. README mis a jour.
+
+2026-09-12  REPR_B valide sur materiel, et test DMA
+-------------------------------------------------------
+MPY_STR.TTP passe SMOKE.PY en entier sur le STE sous EmuTOS 1.4 avec
+TT-RAM -- la configuration qui echouait. Le rapport affiche bien les
+lignes "2-byte aligned" et le test va au bout : le port est desormais
+insensible a son adresse de chargement. Phase 1 terminee et validee.
+
+Ajout de tests/DMATEST.PY, qui repond au point ouvert n.1 : ecrit
+256 Ko, les relit par blocs de 8 Ko dans un tampon du tas et compare.
+Si le driver IDE de la carte ne fait pas de tampon intermediaire, la
+corruption se voit. Le motif n'est construit qu'une fois et les
+comparaisons se font par blocs entiers, en C : a ~600 us le tour de
+boucle Python sur un STE, une verification octet par octet aurait pris
+une dizaine de minutes. L'octet fautif n'est cherche que pour le
+premier bloc corrompu.
+
+2026-09-12  DMA vers la RAM alternative : rien a faire
+---------------------------------------------------------
+DMATEST.PY passe dans les quatre configurations sur le vrai disque IDE
+(EmuTOS 1.4 et TOS 2.06, tas en RAM alternative et en ST-RAM) : 256 Ko
+ecrits puis relus a l'identique. Le point ouvert n.1, ouvert depuis le
+debut du portage et cense conditionner l'architecture de la couche
+fichier, se referme sans code : soit le driver de la TwiSTer gere le
+cas, soit son IDE n'utilise pas le DMA du ST. La phase 2 s'ecrit
+normalement.
+
+Mesures (a l'oeil pres, les relevés viennent de captures d'ecran) :
+  tampon en RAM alternative   ecriture 365 ms   lecture  640 ms
+  tampon en ST-RAM            ecriture 620 ms   lecture 1010 ms
+La RAM alternative est donc ~1,6 a 1,7 fois plus rapide, ce qui valide
+le choix d'y mettre le tas : sur un STE, le bus de la ST-RAM est
+partage avec le shifter video.
+
+Nouveau point ouvert, n.7 : la vitesse. ~760 us par tour de boucle
+Python sur le STE (8192 tours en 6,2 s, mesure quatre fois), contre
+68 us sur le 68030 emule par Hatari. Un facteur dix qu'un simple
+ecart d'horloge n'explique pas. Deux suspects instrumentes :
+  - mp_atari_check_signals() fait un Bconstat() tous les 64 opcodes,
+    soit un trap BIOS toutes les quelques instructions. Sous Geneva,
+    qui s'interpose sur les traps, ce peut etre ruineux.
+    MICROPY_VM_HOOK_COUNT devient surchargeable (-DMICROPY_VM_HOOK_COUNT=N).
+  - le cache d'instructions du 68020, eteint au reset. Le rapport de
+    demarrage lit CACR via Supexec et affiche l'etat des caches.
+Ajout de tests/BENCH.PY (boucle vide, boucle arithmetique, ecriture
+dans un bytearray) et d'un binaire MPY_H.TTP avec le hook a 4096.
+
+2026-09-13  Vitesse : le hook et le cache d'instructions
+------------------------------------------------------------
+Mesures sur le STE (boucle vide, us par tour) :
+
+                      hook/64    hook/4096
+   TOS 2.06             299         248      CACR 0, I-cache eteint
+   EmuTOS 1.4           267         217      CACR 1, I-cache actif
+
+  - MICROPY_VM_HOOK_COUNT passe de 64 a 4096 : ~19% gagnes. Un trap
+    BIOS toutes les 64 instructions de bytecode coute cher sous Geneva,
+    qui s'interpose sur les traps. La latence du Ctrl-C reste bien
+    en dessous de la milliseconde de travail utile.
+  - Le cache d'instructions du 68020 vaut ~12%. Il est eteint sous
+    TOS 2.06 bien que le CPX NeoControl l'affiche actif. Le manuel de
+    la TwiSTer explique pourquoi : "TOS 2.06 sets the machine cookie
+    differently when operating the 68020 in the 1040 STE" -- le
+    reglage du bureau ne parvient donc pas au processeur. EmuTOS, lui,
+    le laisse actif.
+    Option -C : active le cache d'instructions pour la duree de
+    l'execution et restaure CACR en sortant (bit 0 pour l'activer,
+    bit 3 pour le vider d'abord). Opt-in, parce que le cache est
+    cense rester sous le controle de l'utilisateur -- le manuel
+    signale que certains jeux demandent qu'il soit eteint.
+  - Le rapport affiche desormais _CPU et _MCH, precisement parce que
+    TOS 2.06 les renseigne mal sur cette machine.
+
+Le facteur restant avec le 68030 a 32 MHz emule (217 us contre 68) n'a
+rien de suspect : horloge, bus et caches. Note du manuel : la frequence
+reelle depend du cavalier 4 et de SPEED.PRG.
+
+Binaire MPY_O2.TTP fourni pour trancher -Os contre -O2 sur cette
+machine : avec un cache d'instructions de 256 octets, la densite du
+code pourrait compter plus que le nombre d'instructions -- ou l'inverse.
+
+2026-09-13  -Os confirme, et -C sans effet sous TOS 2.06
+-------------------------------------------------------------
+Mesures -O2 contre -Os sur le STE (us par tour) :
+
+                    boucle vide   arithmetique   ecriture tableau
+   TOS 2.06  -Os        249            587             715
+   TOS 2.06  -O2        243            572             654
+   EmuTOS    -Os        216            514             650
+   EmuTOS    -O2        219            517             607
+
+-O2 gagne 2 a 3% sur les boucles quand le cache d'instructions est
+eteint, et RIEN quand il est actif -- avec 256 octets de cache, le code
+compact de -Os compense exactement le nombre d'instructions en plus.
+Seule l'ecriture dans un bytearray y gagne ~7%. Pour 600 Ko de binaire
+supplementaire, le compte n'y est pas : -Os reste le defaut, cette fois
+sur des mesures et non par principe.
+
+L'option -C n'a aucun effet sous TOS 2.06 : CACR relit 00000000 juste
+apres l'ecriture (les temps sont identiques avec et sans). Le cache
+n'est donc pas seulement "non active par le bureau", quelque chose
+empeche l'ecriture de CACR de tenir. -C affiche maintenant, dans le
+meme appel superviseur, l'ancienne valeur, celle ecrite et celle relue,
+pour distinguer une ecriture qui ne passe pas d'une valeur effacee
+ensuite.
+
+A noter : _CPU vaut 20 et _MCH 0x10000 (Mega STE) sur cette machine
+sous les deux systemes. Le cookie n'est donc pas absurde sous TOS 2.06,
+contrairement a ce que le manuel laissait craindre.
+
+2026-09-13  Phase 2 : le systeme de fichiers
+-----------------------------------------------
+modatarios.c (module uos, ~560 lignes). Tout passe par GEMDOS
+directement, pas par la couche POSIX de la MiNTlib : les semantiques
+GEMDOS sont celles que l'utilisateur voit dans Teradesk et EmuCon
+(lettres de lecteur, noms 8.3, parcours par DTA), et les traduire
+finement est plus sur que de deviner la reecriture de chemins d'une
+emulation POSIX. La lecture et l'ecriture de fichiers continuent de
+passer par le VFS POSIX, que la MiNTlib sert tres bien.
+
+  listdir, ilistdir   Fsfirst/Fsnext, avec sauvegarde et restauration
+                      de la DTA de l'appelant
+  getcwd, chdir       Dgetdrv/Dgetpath/Dsetdrv/Dsetpath
+  mkdir, rmdir        Dcreate/Ddelete
+  remove, rename      Fdelete/Frename
+  stat, statvfs       Fsfirst et Dfree
+  uname               cookies _MCH et version TOS
+  drives              Drvmap, la liste des lecteurs presents
+  attrib              Fattrib, l'octet d'attributs GEMDOS
+  system              Pexec, avec la ligne de commande en Pascal
+  getenv, _stat_type
+
+Details qui meritaient d'etre traites :
+  - '/' est accepte partout en entree et normalise en '\\' avant que
+    GEMDOS le voie, ce qui evite d'echapper les antislashs en Python.
+    os.sep vaut quand meme '\\', qui est ce que la plateforme montre.
+  - Dcreate rend "acces refuse" aussi bien quand le nom est pris que
+    quand le disque est protege. mkdir regarde donc si l'entree existe
+    pour lever EEXIST, sans quoi makedirs(exist_ok=True) ne peut pas
+    fonctionner.
+  - _stat_type evite une exception par appel a exists/isdir/isfile :
+    sur une machine ou une instruction Python coute 600 us, lever n'est
+    pas gratuit.
+  - la conversion de charset ST <-> UTF-8 s'applique aux noms rendus.
+
+modules/_atpath.py (150 lignes) : os.path pour GEMDOS. Lettres de
+lecteur, les deux separateurs, et la semantique DOS de "C:FOO" (relatif
+au repertoire courant de C:), d'ou un join("C:", "F.PY") qui n'insere
+pas de separateur. 24 cas de test passent sur l'hote avec CPython.
+
+modules/os.py : walk (base sur ilistdir, donc un seul parcours par
+repertoire), makedirs, removedirs.
+
+tests/FSTEST.PY : chemins, creation, ecriture, relecture, stat,
+renommage, walk, espace disque, menage.
+
+2026-09-14  errno : la MiNTlib ne compte pas comme Linux
+------------------------------------------------------------
+FSTEST.PY passe sur machine (EmuTOS et TOS 2.06) sauf le test du mkdir
+en double, qui rendait errno 85 la ou l'on attendait 17.
+
+Ce n'etait pas le module C : la MiNTlib numerote ses errno d'apres les
+codes d'erreur GEMDOS, et MicroPython prend les valeurs du systeme
+(MICROPY_USE_INTERNAL_ERRNO vaut 0). Sur cette plateforme :
+
+    ENOENT 33   EACCES 36   EEXIST 85   EIO 90
+    EINVAL 25   EISDIR 24   ENOTDIR 34  ENOSPC 91
+
+contre 2, 13, 17, 5, 22, 21, 20 et 28 sous Linux. Les valeurs GEMDOS
+correspondantes se reconnaissent : EFILNF est -33, EACCDN -36.
+
+Corrige dans os.py (makedirs comparait a 17 en dur, herite du port
+Amiga, donc exist_ok ne marchait pas) et dans FSTEST.PY. Note ajoutee
+au README : ne jamais ecrire un numero d'errno en dur dans ce port.
+
+2026-09-14  Phase 3 : le cookie jar et platform
+--------------------------------------------------
+Le temps et le Ctrl-C etaient deja traites en phase 1 ; restait la
+plateforme.
+
+modatarios.c :
+  cookie(nom)   valeur d'un cookie, ou None. Les noms de moins de
+                quatre caracteres sont completes par des espaces,
+                comme le veut la convention.
+  cookies()     le jar entier, en dictionnaire. Le parcours est borne
+                a 256 entrees : un jar corrompu ne doit pas figer
+                l'interprete.
+  meminfo()     (ST-RAM libre, RAM alternative libre)
+
+Seul le POINTEUR du jar, en 0x5A0, demande le mode superviseur -- les
+deux premiers kilo-octets sont proteges sur tout ST. Le jar lui-meme
+est en memoire ordinaire, donc le parcours se fait en mode utilisateur,
+sans Supexec par cookie.
+
+modules/platform.py : machine() (ST/STE/Mega STE/TT/Falcon, en tenant
+compte du mot bas de _MCH qui distingue le Mega STE), processor(),
+fpu(), video(), system() -- qui repond EmuTOS, MagiC ou FreeMiNT selon
+les cookies presents plutot qu'un "TOS" generique --, release(),
+multitasking() (Geneva, MiNT, MagiC), platform() et atari_info(), qui
+resume tout en une ligne.
+
+tests/PFTEST.PY affiche le jar au complet, ce qui servira aussi a
+verifier le decodage de ETOS et de _FPU sur la vraie machine.
+
+2026-09-14  EmuTOS sans cookie ETOS, journal, et le cache
+-------------------------------------------------------------
+Le jar de la machine, releve sur photo (17 cookies sous TOS 2.06,
+18 sous EmuTOS, _AKP et _FDC en plus, USHD en moins) :
+CJar EdDI FSMC Gnva NVDI SCSI XHDI _CPU(20) _FPU(0) _FRB _IDT
+_MCH(0x00010000 = STE) _SND _SWI _USB _VDO(0x00010000).
+
+Aucun cookie ETOS sous EmuTOS 1.4 sur cette machine. platform.system()
+ne pouvait donc pas reconnaitre EmuTOS, qui affiche volontairement un
+numero de version TOS. Corrige : uos.osinfo() lit l'en-tete du systeme
+(pointeur en 0x4F2) et cherche la signature "EmuTOS" dans les huit
+premiers kilo-octets de la ROM. Le cookie reste un repli. release()
+rend alors la version TOS mimee plus la date de build, qui est la
+partie qui identifie vraiment la ROM.
+
+Option -l <fichier> : tout l'affichage est double dans un fichier, en
+UTF-8 et en LF, lisible tel quel sur une autre machine. Le rapport de
+demarrage passe par printf() donc n'y serait pas arrive : il est
+desormais emis par atari_report(), qui ecrit a l'ecran et au journal.
+Fini les captures d'ecran a dechiffrer.
+
+tools/cacheon.c + Makefile.tools : CACHEON.PRG, a copier dans AUTO\.
+Ce sont les deux memes instructions que -C ; l'interet est le MOMENT,
+avant Geneva et avant le bureau. Si le cache s'allume de la et reste
+allume, ce qui l'annulait est quelque chose qui se charge plus tard ;
+s'il reste eteint, l'ecriture ne passe pas et la reponse est
+materielle.
+
+2026-09-14  CACHEON refusait de se lancer, et VIDEOREG
+----------------------------------------------------------
+CACHEON.PRG reclamait un 68881 : Makefile.tools compilait et liait en
+une seule commande, donc -m68020 se retrouvait sur la ligne d'edition
+de liens et selectionnait le multilib m68020-60, dont le demarrage
+MiNTlib verifie la presence d'un FPU. Exactement le piege corrige dans
+le Makefile du port le 11/09, reproduit ici. Compilation et edition de
+liens sont desormais separees. Verifie : multilib ".", crt0 par defaut,
+zero instruction FPU.
+
+tools/videoreg.c : VIDEOREG.PRG, pour l'ecran decale d'une dizaine de
+pixels apres certains resets, avec une bande de droite qui reapparait a
+gauche. C'est la signature du scroll materiel STE reste actif :
+
+  $FF8265  HSCROLL, decalage fin de 0 a 15 pixels
+  $FF820F  decalage de ligne, mots sautes en fin de ligne
+
+Les deux vont ensemble : HSCROLL decale l'image vers la gauche et le
+shifter va chercher un mot de plus par ligne pour combler ; le decalage
+de ligne lui dit combien en sauter. HSCROLL non nul sans le reste et
+l'image glisse, le mot enroule reapparaissant de l'autre cote.
+
+Le programme affiche base ecran, compteur video, mode sync, resolution,
+decalage de ligne et HSCROLL, dit si le scroll est actif, et remet tout
+a zero avec l'argument "fix". $FF8264 n'est pas affiche : c'est la
+variante en ecriture seule du meme registre, la relire n'a pas de sens
+-- mais le "fix" y ecrit aussi, pour couvrir les deux chemins.
+
+2026-09-15  Le cache : c'etait le moment, pas les instructions
+-----------------------------------------------------------------
+CACHEON.PRG depuis le dossier AUTO\ active le cache d'instructions, et
+il reste actif -- MicroPython le voit allume. Les memes deux
+instructions lancees par l'option -C une fois le systeme demarre ne
+tenaient pas. L'hypothese du moment est donc confirmee : quelque chose
+charge apres CACHEON (Geneva, selon toute vraisemblance, qui restaure
+un contexte processeur) annulait l'ecriture.
+
+La question de la vitesse se referme : 299 -> 216 us par tour de boucle
+vide, soit 28% gagnes, dont ~19% sur le hook Ctrl-C et ~12% sur le
+cache.
+
+FSTEST.PY passe en entier sur la machine. La phase 2 est validee sur
+materiel, la phase 3 aussi.
+
+VIDEOREG.PRG n'a pas encore servi, le decalage d'image ne s'etant pas
+represente.
+
+2026-09-15  Phase 4bis : machine.I2C sur le bus de la TwiSTer
+----------------------------------------------------------------
+machine_atari.c (250 lignes). Le protocole vient entierement de
+extmod/machine_i2c.c -- start, stop, ACK, NACK, clock stretching,
+scan(), readfrom_mem() -- et le port ne fournit que les cinq primitives
+de ligne. Un module 'machine' maison plutot que MICROPY_PY_MACHINE, qui
+reclamerait une pile de crochets (reset, freq, idle, unique_id) sans
+objet ici.
+
+Deux decisions qui comptent :
+
+  - UN SEUL Supexec par transfert, pas un par bit. Les registres sont
+    en espace d'E/S, donc superviseur obligatoire, et un trap coute
+    cher sous Geneva. Les primitives de ligne supposent donc qu'elles
+    tournent deja en superviseur, et atari_i2c_transfer() enveloppe
+    tout l'echange.
+
+  - SDA est traite en vrai collecteur ouvert : relacher = passer la
+    ligne en entree et laisser les pull-ups agir. Le driver RTC de la
+    carte lit SDA de cette maniere et y arrive, ce qui prouve que les
+    pull-ups existent. SCL, lui, est pilote en sortie par defaut, comme
+    le fait ce meme driver -- mais le port SONDE au demarrage si SCL se
+    relit correctement, et bascule alors en collecteur ouvert, ce qui
+    active le clock stretching de extmod sans rien ecrire de plus.
+    Le point ouvert n.3 se repond donc tout seul, sur la machine.
+
+mp_hal_pin_obj_t doit etre un #define et non un typedef : py/mphal.h
+retombe sur son API de broches virtuelles tant que le symbole n'est pas
+DEFINI.
+
+tests/I2CTEST.PY : scan du bus, puis lecture des sept registres du
+DS1307 et comparaison avec l'heure GEMDOS. Ne fait que lire.
+
+2026-09-14  Le bus I2C repond, et l'horloge n'est pas celle qu'on croyait
+-----------------------------------------------------------------------------
+I2CTEST.PY sur la machine :
+
+  I2C(TwiSTer, freq=50000, SCL readable, clock stretching on)
+  3 adresse(s) en 150 ms : 0x2c, 0x57, 0x68
+  RTC  : 14/09/2026 08:08:42
+  GEMDOS: 14/09/2026 08:08:40
+
+Trois points ouverts se referment :
+  - les registres sont bien ceux de la MonSTer (point 2) ;
+  - SCL est relisable, la sonde le detecte et le clock stretching
+    s'active tout seul (point 3) ;
+  - readfrom_mem() fonctionne, donc repeated-start et ACK aussi.
+
+Deux decouvertes dans le scan :
+  - 0x57 revele que l'horloge est un module DS3231, pas un DS1307. Le
+    manuel de la carte le confirme d'ailleurs noir sur blanc. Le DS3231
+    embarque une EEPROM AT24C32 de 4 Ko (d'ou 0x57) et un capteur de
+    temperature, dont il se sert pour compenser son quartz.
+  - 0x2C reste inconnu. Ni le manuel ni le module d'horloge ne
+    l'expliquent ; le conditionnement d'horloge de la carte est assure
+    par le CPLD Xilinx et l'USB par un ISP1160, ni l'un ni l'autre en
+    I2C. A sonder en lecture seule.
+
+Les 2 secondes d'ecart ne sont pas un artefact d'affichage : le test lit
+le DS3231 AVANT GEMDOS, donc un retard d'affichage rendrait GEMDOS plus
+TARD, pas plus tot. C'est une derive reelle de l'horloge systeme, qui
+est entretenue par l'interruption a 200 Hz et perd des tics des que
+quelque chose masque les interruptions -- disque, pilotes, Geneva.
+
+Ajout de os.settime(annee, mois, jour, heure, minute, seconde) pour la
+recaler. GEMDOS ne stocke les secondes que par pas de deux : son format
+leur alloue cinq bits, d'ou la division par deux.
+
+tests/RTCTEST.PY : temperature du DS3231, registres d'etat, EEPROM
+(lecture, et ecriture sur demande), sondage de 0x2C en lecture seule,
+et mesure de la derive avec recalage optionnel.
+
+2026-09-14  Phase 5 : memoire, ecran, serie, MIDI, son
+---------------------------------------------------------
+machine_mem.c (220 lignes)
+  mem8/16/32     lecture et ecriture de n'importe quelle adresse. Le
+                 passage en superviseur est automatique mais CIBLE :
+                 uniquement sous 0x800 et au-dessus de 0xFF8000. Ailleurs
+                 l'acces est direct, sans quoi une boucle sur la memoire
+                 ecran serait inutilisable.
+  mem_buffer     rend un bytearray qui PARTAGE la memoire visee, sans
+                 copie. Refuse les zones protegees : on ne peut pas
+                 passer en superviseur au moment ou Python y touchera.
+  Physbase, Logbase, Getrez, Vsync, Setcolor, Setpalette, screen_info
+  Kbshift, Random, Dosound, Giaccess
+
+machine_uart.c (263 lignes)
+  machine.UART(peripherique, baudrate=, bits=, parity=, stop=, flow=,
+  timeout=) sur les peripheriques BIOS 0 (imprimante), 1 (RS-232),
+  2 (console) et 3 (MIDI). Objet flux : read, readinto, readline,
+  write, any.
+  La lecture passe par Bconstat/Bconin caractere par caractere, ce que
+  le BIOS impose. L'ECRITURE non : Bconout par caractere serait d'une
+  lenteur absurde, donc le RS-232 sort par Fwrite sur le descripteur
+  GEMDOS 2 et le MIDI par Midiws, qui prennent tous deux une chaine
+  entiere.
+  La vitesse est traduite en code Rsconf et l'UCR du MFP 68901 est
+  construit a partir de bits/parite/stop. Rsconf accepte -1 pour
+  "ne touche pas a celui-la", ce dont on se sert.
+  L'attente de caracteres appelle mp_atari_check_signals() : sans cela
+  un read() bloquant serait ininterruptible, et sous Geneva il
+  affamerait le reste de la machine.
+
+Le point qui rend tout cela interessant : framebuf est deja compile
+dans le binaire, et en monochrome 640x400 l'ecran ST est UN SEUL plan
+de bits. Donc
+
+    ecran = machine.mem_buffer(machine.Physbase(), 32000)
+    fb = framebuf.FrameBuffer(ecran, 640, 400, framebuf.MONO_HMSB)
+    fb.text("Bonjour", 10, 10, 1)
+
+dessine directement dans la memoire ecran, sans VDI et sans une ligne
+de C de plus. En couleur les plans sont entrelaces et framebuf ne sait
+pas faire : screen_info() rend le nombre de plans, ce qui permet a
+Python de savoir s'il peut.
+
+tests/HWTEST.PY : lecture des variables systeme, geometrie ecran,
+dessin framebuf chronometre, etat du clavier, et sur demande un bip
+YM2149 (sound) ou un essai du RS-232 (serial).
+
+2026-09-14  Retours de HWTEST : memset/memcpy, -w, et instrumentation
+------------------------------------------------------------------------
+Le test passe sur la machine (mono 640x400, Physbase 0x003f8000, TOS
+2.06 a 0x00e00000). Trois suites.
+
+1. framebuf en monochrome pose les pixels UN PAR UN : 530 ms pour
+   effacer 640x400, soit ~2 us par pixel, ce qui est normal pour du C
+   sur un 68020 a 24 MHz mais inutilisable pour du travail en bloc.
+   Ajout de machine.memset() et machine.memcpy(), qui acceptent aussi
+   bien une adresse qu'un objet tampon. memcpy utilise memmove, l'ecran
+   et un tampon pouvant se recouvrir. Effacer 32000 octets passe ainsi
+   de 530 ms a quelques millisecondes. Repartition des roles : framebuf
+   pour les formes, memset/memcpy pour le gros oeuvre -- effacement,
+   double tampon, sauvegarde d'ecran.
+
+2. Fin de programme : impossible de revenir au bureau, reset necessaire,
+   et ce sur TOUS les tests, pas seulement celui qui dessine. Deux
+   causes possibles a distinguer : soit on n'atteint jamais la fin de
+   main(), soit on en sort proprement et c'est le shell qui garde sa
+   fenetre. Le binaire ecrit desormais "[exit] status=N" DANS LE
+   JOURNAL (pas a l'ecran) juste avant de rendre la main : si le log se
+   termine par cette ligne, le probleme n'est pas chez nous.
+   Ajout aussi de l'option -w, qui attend une touche avant de terminer.
+
+3. HWTEST.PY sauvegarde l'ecran par memcpy avant de dessiner et le
+   restaure a la fin, pour rendre le bureau intact.
+
+Note sur VIDEOREG : il n'a rien trouve lors d'une nouvelle occurrence du
+decalage d'image. A savoir -- sur STE, $FF8265 n'est pas garanti
+relisable. Une valeur nulle affichee ne prouve donc pas que le scroll
+materiel est a zero, et "VIDEOREG fix" vaut la peine d'etre lance meme
+quand l'affichage annonce 00.
+
+2026-09-14  Le retour au bureau : ce n'est pas nous
+--------------------------------------------------------
+Le journal se termine bien par "[exit] status=0" : on atteint la fin de
+main() et on rend la main proprement. Le blocage au retour au bureau
+vient donc de ce qui nous a lances, pas de notre fermeture.
+
+A noter au passage, et c'est un piege pour la suite : le fichier journal
+faisait 0 octet juste apres l'execution, et n'a ete ecrit qu'apres le
+lancement d'un autre programme. C'est le cache en ecriture differee du
+driver de disque. Consequence pratique : ne pas retirer la carte CF
+juste apres une execution, sous peine de recuperer un fichier vide.
+
+Reste a savoir si le blocage tient au chargement en RAM alternative
+(PRGFLAGS 0x07) ou au shell. MPY_STR.TTP (PRGFLAGS 0x01, tout en
+ST-RAM) est remis sur le disque pour comparer, avec TINY.PY, un script
+qui ne fait qu'afficher une ligne -- de quoi separer ce que fait le
+script de ce que fait le lancement.
+
+2026-09-14  Le blocage est APRES la fin du script
+---------------------------------------------------
+Nouveaux faits : sous EmuCon aussi, HWTEST.PY ne rend pas la main
+(curseur en fin de ligne), et fermer la fenetre EmuCon donne 4 bombes,
+soit une instruction illegale -- quelque chose saute dans le vide. Avec
+TINY.PY, qui n'affiche qu'une ligne, les DEUX binaires laissent une
+fenetre ouverte : ce n'est donc ni le script, ni le chargement en RAM
+alternative du programme.
+
+Or le journal contient bien "[exit] status=0". Le blocage se situe donc
+entre cette ligne et le retour effectif au shell, c'est-a-dire dans
+notre sequence de fermeture ou dans la sortie de la MiNTlib.
+
+Option -x : chaque etape de la fermeture est nommee sur la console
+(et dans le journal), pour situer le blocage exactement.
+  [exit] status=N
+  [x] freeing heap          avant Mfree
+  [x] heap freed            apres
+  [x] log closed, returning from main
+  [x] atexit reached        depuis exit() de la MiNTlib
+Le Mfree est le suspect principal : le tas vient de Mxalloc en RAM
+alternative, servie par un driver tiers, et le liberer est le chemin le
+moins frequente de tout le port. L'option -s, qui force le tas en
+ST-RAM, permet de le confirmer d'un seul essai.
+
+Au passage, la restauration de CACR (option -C) manquait dans le chemin
+de sortie normal depuis qu'il n'appelle plus cleanup() ; corrige.
+
+2026-09-15  L'entree console passe par GEMDOS, plus par le BIOS
+------------------------------------------------------------------
+Deux symptomes, une seule cause. Lance depuis EmuCON2, le port
+n'ecrivait pas dans la fenetre du shell mais s'en ouvrait une a lui, et
+EmuCON2 ne reprenait jamais la main.
+
+Bconin(2) et Bconstat(2) lisent la console PHYSIQUE, sans egard pour ce
+que le shell qui nous a lances a pu arranger. Sous Geneva cela a deux
+consequences visibles : toucher la console BIOS fait attribuer au
+processus une fenetre a lui, et le shell ne recupere pas son clavier.
+
+Remplaces par Cconis() et Crawcin(), leurs equivalents GEMDOS, qui
+lisent l'entree standard -- heritee et redirigeable. Crawcin() conserve
+le code de touche dans les bits 16-23 quand l'entree standard est bien
+la console, donc les fleches continuent de fonctionner ; quand c'est un
+tube ou une fenetre de shell, on recoit simplement le caractere, ce qui
+est exactement ce qu'il faut la.
+
+La sortie, elle, passait deja par Fwrite sur le descripteur 1, donc par
+GEMDOS et de maniere redirigeable : rien a y changer.
+
+Sur le blocage au retour au bureau : tout fonctionne desormais sous
+TOS 2.06, depuis le bureau comme depuis EmuCON2, avec ou sans -x. Sans
+explication etablie -- les deux sequences de sortie etant
+fonctionnellement identiques pour un lancement sans -l, la difference
+etait ailleurs (systeme, ou etat de la machine). A surveiller sous
+EmuTOS, ou le probleme avait ete vu en premier.

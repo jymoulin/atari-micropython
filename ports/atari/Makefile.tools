@@ -1,0 +1,55 @@
+# Standalone TOS utilities, built with the same toolchain as the port.
+#   make -f Makefile.tools
+
+MINT_BIN_DIR ?= /opt/cross-mint/bin
+ifneq ($(wildcard $(MINT_BIN_DIR)/m68k-atari-mintelf-gcc),)
+CROSS_COMPILE ?= $(MINT_BIN_DIR)/m68k-atari-mintelf-
+else
+CROSS_COMPILE ?= m68k-atari-mintelf-
+endif
+
+CC = $(CROSS_COMPILE)gcc
+FLAGS_TOOL = $(CROSS_COMPILE)flags
+
+# 68000 code, soft float: these tools must also run on a stock ST/STE, next
+# to MPY00.TTP, and none of them is speed critical.
+CFLAGS_TOOLS = -m68000 -msoft-float -Os -Wall -ffunction-sections -fdata-sections
+LDFLAGS_TOOLS = -msoft-float -s -Wl,--gc-sections
+
+# CACHEON.PRG est devenu un projet a part : ~/Documents/Dev/Atari/cache
+TOOLS = build/VIDEOREG.PRG build/FORCETST.TTP build/RUNTEST.PRG build/MPYRUN.PRG
+
+all: $(TOOLS)
+
+# Compilation et edition de liens separees, comme dans le Makefile du port
+# (ou c'est indispensable : -m68020 sur la ligne de link ferait choisir le
+# multilib m68020-60, dont la MiNTlib exige un 68881 au demarrage).
+build/%.o: tools/%.c | build
+	$(CC) $(CFLAGS_TOOLS) -c -o $@ $<
+
+build/VIDEOREG.PRG: build/videoreg.o
+	$(CC) $(LDFLAGS_TOOLS) -o $@ $<
+	$(FLAGS_TOOL) -f 0x01 $@
+	@echo "Ready: $@"
+
+build/FORCETST.TTP: build/forcetst.o
+	$(CC) $(LDFLAGS_TOOLS) -o $@ $<
+	$(FLAGS_TOOL) -f 0x01 $@
+	@echo "Ready: $@"
+
+build/RUNTEST.PRG: build/runtest.o
+	$(CC) $(LDFLAGS_TOOLS) -o $@ $<
+	$(FLAGS_TOOL) -f 0x01 $@
+	@echo "Ready: $@  (outil de test Hatari, voir tools/runtest.c)"
+
+# Le lanceur GEM : seul outil a avoir besoin de la gemlib.
+build/MPYRUN.PRG: build/mpyrun.o
+	$(CC) $(LDFLAGS_TOOLS) -o $@ $< -lgem
+	$(FLAGS_TOOL) -f 0x01 $@
+	@echo "Ready: $@  (a poser a cote de MPY20.TTP ou MPY00.TTP)"
+
+build:
+	mkdir -p build
+
+clean:
+	rm -f $(TOOLS) build/*.o
