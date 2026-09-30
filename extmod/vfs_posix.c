@@ -59,6 +59,11 @@ typedef struct _mp_obj_vfs_posix_t {
 
 static const char *vfs_posix_get_path_str(mp_obj_vfs_posix_t *self, mp_obj_t path) {
     const char *path_str = mp_obj_str_get_str(path);
+    // Allow port to convert filename encoding (e.g., UTF-8 → Latin-1 for AmigaOS)
+    #ifdef MICROPY_VFS_POSIX_CONVERT_PATH
+    char path_conv_buf_[256];
+    path_str = MICROPY_VFS_POSIX_CONVERT_PATH(path_str, path_conv_buf_, sizeof(path_conv_buf_));
+    #endif
     if (self->root_len == 0 || path_str[0] != '/') {
         return path_str;
     } else {
@@ -90,6 +95,11 @@ static mp_obj_t vfs_posix_fun1_helper(mp_obj_t self_in, mp_obj_t path_in, int (*
 
 static mp_import_stat_t mp_vfs_posix_import_stat(void *self_in, const char *path) {
     mp_obj_vfs_posix_t *self = self_in;
+    // Allow port to convert filename encoding (e.g., UTF-8 → Latin-1 for AmigaOS)
+    #ifdef MICROPY_VFS_POSIX_CONVERT_PATH
+    char import_path_conv_buf_[256];
+    path = MICROPY_VFS_POSIX_CONVERT_PATH(path, import_path_conv_buf_, sizeof(import_path_conv_buf_));
+    #endif
     if (self->root_len != 0) {
         self->root.len = self->root_len;
         vstr_add_str(&self->root, path);

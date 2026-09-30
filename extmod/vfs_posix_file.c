@@ -102,6 +102,11 @@ mp_obj_t mp_vfs_posix_file_open(const mp_obj_type_t *type, mp_obj_t file_in, mp_
     }
 
     const char *fname = mp_obj_str_get_str(fid);
+    // Allow port to convert filename encoding (e.g., UTF-8 → Latin-1 for AmigaOS)
+    #ifdef MICROPY_VFS_POSIX_CONVERT_PATH
+    char fname_conv_buf_[256];
+    fname = MICROPY_VFS_POSIX_CONVERT_PATH(fname, fname_conv_buf_, sizeof(fname_conv_buf_));
+    #endif
     int fd;
     MP_HAL_RETRY_SYSCALL(fd, open(fname, mode_x | mode_rw, 0644), mp_raise_OSError(err));
     o->fd = fd;
