@@ -1,3 +1,22 @@
+2026-09-30  BENCH.PY sur le STE : 1.28 contre 1.29, 68020 contre 68000
+---------------------------------------------------------------
+STE + TwiSTer, 68020 a 24 MHz, EmuTOS 1.4, cache actif, alt-RAM, STinG
+en version optimisee. Journaux B, B1, B4 (68020) et B3 (MPY00) :
+                        vide     arithm.  tableau
+  MPY.TTP   1.28        4530     2675     2695 ms
+  MPY20.TTP 1.29        4535     2725     2750 ms   (deux runs identiques
+                                                     a 10 ms pres)
+  MPY00.TTP 1.29        5425     3545     3385 ms
+- 1.28 -> 1.29 : boucle vide identique, arithmetique et tableau +2 %.
+  Faible mais reproductible ; cause non cherchee (changements amont ou
+  simple placement du code).
+- MPY00 sur 68020 : +20 % a +33 %. Attendu : en 68000, gcc appelle
+  __mulsi3 au lieu de muls.l et n'a ni extb.l ni les modes d'adressage
+  indexes du 68020. MPY20 reste LE binaire des machines 68020/030.
+- STinG : boucle vide a 4530 ms contre 4410 sans STinG le 29/09, soit
+  ~+3 %, la ou l'ancien STinG avec IP coutait ~+11,5 %.
+BENCH.PY : commentaire sur la detection d'EmuTOS mis a jour.
+
 2026-09-30  Passage a MicroPython 1.29, sur un vrai fork
 -----------------------------------------------------
 Nouveau depot : ~/Downloads/github/atari-upython, clone de

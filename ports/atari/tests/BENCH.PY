@@ -15,8 +15,8 @@ try:
     print("uname            :", uos.uname())
     print("multitache       :", platform.multitasking())
     # La date de la ROM tranche : TOS 2.06 est de 1991, EmuTOS recent.
-    # (platform.system() peut prendre un EmuTOS pour un TOS : sa detection
-    # ne cherche la chaine "EmuTOS" que dans les 8 premiers Ko de la ROM.)
+    # (Redondant depuis que platform reconnait EmuTOS a son en-tete "ETOS",
+    # garde pour les anciens binaires.)
     i = uos.osinfo()
     d = i["date"]
     print("ROM              : version %x, date (mm/jj/aaaa) %02x/%02x/%04x, EmuTOS %s" % (
