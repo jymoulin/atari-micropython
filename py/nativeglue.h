@@ -179,7 +179,15 @@ typedef struct _mp_fun_table_t {
     const mp_obj_fun_builtin_var_t *stream_readinto_obj;
     const mp_obj_fun_builtin_var_t *stream_unbuffered_readline_obj;
     const mp_obj_fun_builtin_var_t *stream_write_obj;
+    #if MICROPY_SMALL_INT_MUL_HELPER
+    // Last on purpose: appended after the stable part of the table.
+    mp_int_t (*small_int_multiply)(mp_int_t num, mp_int_t mulp);
+    #endif
 } mp_fun_table_t;
+
+#if MICROPY_SMALL_INT_MUL_HELPER
+#define MP_F_SMALL_INT_MULTIPLY ((sizeof(mp_fun_table_t) / sizeof(void *)) - 1)
+#endif
 
 #if (MICROPY_ENABLE_NATIVE_CODE && !MICROPY_DYNAMIC_COMPILER) || MICROPY_ENABLE_DYNRUNTIME
 extern const mp_fun_table_t mp_fun_table;

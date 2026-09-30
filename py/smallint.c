@@ -47,3 +47,10 @@ mp_int_t mp_small_int_floor_divide(mp_int_t num, mp_int_t denom) {
     }
     return num / denom;
 }
+
+#if MICROPY_SMALL_INT_MUL_HELPER
+// For native code on CPUs with no 32-bit multiply (the 68000).
+mp_int_t mp_small_int_multiply(mp_int_t num, mp_int_t mulp) {
+    return num * mulp;
+}
+#endif

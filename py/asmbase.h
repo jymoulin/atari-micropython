@@ -35,6 +35,7 @@
 
 typedef struct _mp_asm_base_t {
     uint8_t pass;
+    bool endian;    // true : cible big-endian (m68k), pour mp_asm_base_data
 
     // Set to true using mp_asm_base_suppress_code() if the code generator
     // should suppress emitted code due to it being dead code.

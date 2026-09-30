@@ -103,7 +103,8 @@ static const emit_method_table_t *emit_native_table[] = {
     &emit_native_xtensa_method_table,
     &emit_native_xtensawin_method_table,
     &emit_native_rv32_method_table,
-    NULL,
+    NULL,                               // RV64IMC
+    &emit_native_m68k_method_table,     // M68K, apres RV64IMC
     &emit_native_debug_method_table,
 };
 
@@ -123,6 +124,8 @@ static const emit_method_table_t *emit_native_table[] = {
 #define NATIVE_EMITTER(f) emit_native_xtensawin_##f
 #elif MICROPY_EMIT_RV32
 #define NATIVE_EMITTER(f) emit_native_rv32_##f
+#elif MICROPY_EMIT_M68K
+#define NATIVE_EMITTER(f) emit_native_m68k_##f
 #elif MICROPY_EMIT_NATIVE_DEBUG
 #define NATIVE_EMITTER(f) emit_native_debug_##f
 #else
@@ -149,6 +152,8 @@ static const emit_inline_asm_method_table_t *emit_asm_table[] = {
     &emit_inline_xtensa_method_table,
     &emit_inline_xtensa_method_table,
     &emit_inline_rv32_method_table,
+    NULL,                               // RV64IMC
+    &emit_inline_m68k_method_table,     // M68K
 };
 
 #elif MICROPY_EMIT_INLINE_ASM
@@ -162,6 +167,9 @@ static const emit_inline_asm_method_table_t *emit_asm_table[] = {
 #elif MICROPY_EMIT_INLINE_RV32
 #define ASM_DECORATOR_QSTR MP_QSTR_asm_rv32
 #define ASM_EMITTER(f) emit_inline_rv32_##f
+#elif MICROPY_EMIT_INLINE_M68K
+#define ASM_DECORATOR_QSTR MP_QSTR_asm_m68k
+#define ASM_EMITTER(f) emit_inline_m68k_##f
 #else
 #error "unknown asm emitter"
 #endif
@@ -861,6 +869,8 @@ static bool compile_built_in_decorator(compiler_t *comp, size_t name_len, mp_par
     } else if (attr == MP_QSTR_asm_xtensa) {
         *emit_options = MP_EMIT_OPT_ASM;
     } else if (attr == MP_QSTR_asm_rv32) {
+        *emit_options = MP_EMIT_OPT_ASM;
+    } else if (attr == MP_QSTR_asm_m68k) {
         *emit_options = MP_EMIT_OPT_ASM;
     #else
     } else if (attr == ASM_DECORATOR_QSTR) {

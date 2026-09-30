@@ -59,7 +59,7 @@
 #endif
 
 // wrapper around everything in this file
-#if N_X64 || N_X86 || N_THUMB || N_ARM || N_XTENSA || N_XTENSAWIN || N_RV32 || N_DEBUG
+#if N_X64 || N_X86 || N_THUMB || N_ARM || N_XTENSA || N_XTENSAWIN || N_RV32 || N_M68K || N_DEBUG
 
 // C stack layout for native functions:
 //  0:                          nlr_buf_t [optional]
@@ -316,6 +316,9 @@ emit_t *EXPORT_FUN(new)(mp_emit_common_t * emit_common, mp_obj_t *error_slot, ui
     emit->exc_stack = m_new(exc_stack_entry_t, emit->exc_stack_alloc);
     emit->as = m_new0(ASM_T, 1);
     mp_asm_base_init(&emit->as->base, max_num_labels);
+    #ifdef ASM_BIG_ENDIAN
+    emit->as->base.endian = true;   // pour mp_asm_base_data
+    #endif
     return emit;
 }
 
@@ -506,6 +509,8 @@ static void emit_native_start_pass(emit_t *emit, pass_kind_t pass, scope_t *scop
 
         #if N_X86
         asm_x86_mov_arg_to_r32(emit->as, 0, REG_PARENT_ARG_1);
+        #elif N_M68K
+        asm_m68k_mov_arg_to_r32(emit->as, 0, REG_PARENT_ARG_1);
         #endif
 
         // Load REG_FUN_TABLE with a pointer to mp_fun_table, found in the const_table
@@ -526,6 +531,10 @@ static void emit_native_start_pass(emit_t *emit, pass_kind_t pass, scope_t *scop
         asm_x86_mov_arg_to_r32(emit->as, 1, REG_ARG_1);
         asm_x86_mov_arg_to_r32(emit->as, 2, REG_ARG_2);
         asm_x86_mov_arg_to_r32(emit->as, 3, REG_LOCAL_LAST);
+        #elif N_M68K
+        asm_m68k_mov_args_to_r32(emit->as, 1, (1 << REG_ARG_1) |
+            (1 << REG_ARG_2) |
+            (1 << REG_LOCAL_LAST));
         #else
         ASM_MOV_REG_REG(emit->as, REG_ARG_1, REG_PARENT_ARG_2);
         ASM_MOV_REG_REG(emit->as, REG_ARG_2, REG_PARENT_ARG_3);
@@ -582,6 +591,8 @@ static void emit_native_start_pass(emit_t *emit, pass_kind_t pass, scope_t *scop
             // Put address of code_state into REG_GENERATOR_STATE
             #if N_X86
             asm_x86_mov_arg_to_r32(emit->as, 0, REG_GENERATOR_STATE);
+            #elif N_M68K
+            asm_m68k_mov_arg_to_r32(emit->as, 0, REG_GENERATOR_STATE);
             #else
             ASM_MOV_REG_REG(emit->as, REG_GENERATOR_STATE, REG_PARENT_ARG_1);
             #endif
@@ -589,6 +600,8 @@ static void emit_native_start_pass(emit_t *emit, pass_kind_t pass, scope_t *scop
             // Put throw value into LOCAL_IDX_THROW_VAL slot, for yield/yield-from
             #if N_X86
             asm_x86_mov_arg_to_r32(emit->as, 1, REG_PARENT_ARG_2);
+            #elif N_M68K
+            asm_m68k_mov_arg_to_r32(emit->as, 1, REG_PARENT_ARG_2);
             #endif
             ASM_MOV_LOCAL_REG(emit->as, LOCAL_IDX_THROW_VAL(emit), REG_PARENT_ARG_2);
 
@@ -614,6 +627,11 @@ static void emit_native_start_pass(emit_t *emit, pass_kind_t pass, scope_t *scop
             asm_x86_mov_arg_to_r32(emit->as, 1, REG_PARENT_ARG_2);
             asm_x86_mov_arg_to_r32(emit->as, 2, REG_PARENT_ARG_3);
             asm_x86_mov_arg_to_r32(emit->as, 3, REG_PARENT_ARG_4);
+            #elif N_M68K
+            asm_m68k_mov_args_to_r32(emit->as, 0, (1 << REG_PARENT_ARG_1) |
+                (1 << REG_PARENT_ARG_2) |
+                (1 << REG_PARENT_ARG_3) |
+                (1 << REG_PARENT_ARG_4));
             #endif
 
             // Load REG_FUN_TABLE with a pointer to mp_fun_table, found in the const_table
@@ -627,8 +645,15 @@ static void emit_native_start_pass(emit_t *emit, pass_kind_t pass, scope_t *scop
             // Set code_state.fun_bc
             ASM_MOV_LOCAL_REG(emit->as, LOCAL_IDX_FUN_OBJ(emit), REG_PARENT_ARG_1);
 
-            // Set code_state.n_state (only works on little endian targets due to n_state being uint16_t)
+            // Set code_state.n_state. n_state is a uint16_t followed by the
+            // uint16_t exc_sp_idx, and this writes a whole word: n_state
+            // lands in the low half on little-endian targets, in the high
+            // half on big-endian ones (m68k). Either way exc_sp_idx gets 0.
+            #if N_M68K
+            emit_native_mov_state_imm_via(emit, emit->code_state_start + OFFSETOF_CODE_STATE_N_STATE, (mp_uint_t)emit->n_state << 16, REG_ARG_1);
+            #else
             emit_native_mov_state_imm_via(emit, emit->code_state_start + OFFSETOF_CODE_STATE_N_STATE, emit->n_state, REG_ARG_1);
+            #endif
 
             // Put address of code_state into first arg
             ASM_MOV_REG_LOCAL_ADDR(emit->as, REG_ARG_1, emit->code_state_start);
@@ -2418,6 +2443,17 @@ static void emit_native_binary_op(emit_t *emit, mp_binary_op_t op) {
             return;
         }
 
+        #if MICROPY_SMALL_INT_MUL_HELPER && defined(ASM_CALL_IND_N)
+        // No 32-bit multiply on the 68000: call a helper instead.
+        if (op == MP_BINARY_OP_MULTIPLY) {
+            emit_pre_pop_reg_reg(emit, &vtype_rhs, REG_ARG_2, &vtype_lhs, REG_ARG_1);
+            need_reg_all(emit);
+            ASM_CALL_IND_N(emit->as, MP_F_SMALL_INT_MULTIPLY, 2);
+            emit_post_push_reg(emit, VTYPE_INT, REG_RET);
+            return;
+        }
+        #endif
+
         int reg_rhs = REG_ARG_3;
         emit_pre_pop_reg_flexible(emit, &vtype_rhs, &reg_rhs, REG_RET, REG_ARG_2);
         emit_pre_pop_reg(emit, &vtype_lhs, REG_ARG_2);
@@ -2453,9 +2489,11 @@ static void emit_native_binary_op(emit_t *emit, mp_binary_op_t op) {
         } else if (op == MP_BINARY_OP_SUBTRACT) {
             ASM_SUB_REG_REG(emit->as, REG_ARG_2, reg_rhs);
             emit_post_push_reg(emit, vtype_lhs, REG_ARG_2);
+        #if !(MICROPY_SMALL_INT_MUL_HELPER && defined(ASM_CALL_IND_N))
         } else if (op == MP_BINARY_OP_MULTIPLY) {
             ASM_MUL_REG_REG(emit->as, REG_ARG_2, reg_rhs);
             emit_post_push_reg(emit, vtype_lhs, REG_ARG_2);
+        #endif
         } else if (op == MP_BINARY_OP_LESS
                    || op == MP_BINARY_OP_MORE
                    || op == MP_BINARY_OP_EQUAL
@@ -2627,6 +2665,28 @@ static void emit_native_binary_op(emit_t *emit, mp_binary_op_t op) {
                 default:
                     break;
             }
+            #elif N_M68K
+            // cmp.l rhs,lhs positionne les indicateurs selon lhs - rhs. En non
+            // signe, lhs < rhs pose la retenue : CS, et lhs >= rhs : CC. Le
+            // port X68000 avait les deux inverses (verifie par VIPERTEST :
+            // 3 < 3 y etait vrai).
+            static const uint ccs[6 + 6] = {
+                // unsigned
+                ASM_M68K_CC_CS,
+                ASM_M68K_CC_HI,
+                ASM_M68K_CC_EQ,
+                ASM_M68K_CC_LS,
+                ASM_M68K_CC_CC,
+                ASM_M68K_CC_NE,
+                // signed
+                ASM_M68K_CC_LT,
+                ASM_M68K_CC_GT,
+                ASM_M68K_CC_EQ,
+                ASM_M68K_CC_LE,
+                ASM_M68K_CC_GE,
+                ASM_M68K_CC_NE,
+            };
+            asm_m68k_cmp_reg_reg_setcc(emit->as, REG_ARG_2, reg_rhs, ccs[op_idx], REG_RET);
             #elif N_DEBUG
             asm_debug_setcc_reg_reg_reg(emit->as, op_idx, REG_RET, REG_ARG_2, reg_rhs);
             #else

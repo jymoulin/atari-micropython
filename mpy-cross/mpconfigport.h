@@ -49,6 +49,10 @@
 #define MICROPY_EMIT_XTENSAWIN      (1)
 #define MICROPY_EMIT_RV32           (1)
 #define MICROPY_EMIT_INLINE_RV32    (1)
+#define MICROPY_EMIT_M68K           (1)
+#define MICROPY_EMIT_INLINE_M68K    (1)
+// Only the m68k emitter uses it (it alone defines ASM_CALL_IND_N).
+#define MICROPY_SMALL_INT_MUL_HELPER (1)
 #define MICROPY_EMIT_NATIVE_DEBUG   (1)
 #define MICROPY_EMIT_NATIVE_DEBUG_PRINTER (&mp_stdout_print)
 

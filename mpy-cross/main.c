@@ -148,7 +148,7 @@ static int usage(char **argv) {
         "-msmall-int-bits=number : set the maximum bits used to encode a small-int\n"
         "-march=<arch> : set architecture for native emitter;\n"
         "                x86, x64, armv6, armv6m, armv7m, armv7em, armv7emsp,\n"
-        "                armv7emdp, xtensa, xtensawin, rv32imc, rv64imc, host, debug\n"
+        "                armv7emdp, xtensa, xtensawin, rv32imc, rv64imc, m68k, host, debug\n"
         "-march-flags=<flags> : set architecture-specific flags (can be either a dec/hex/bin value or a comma-separated flags string)\n"
         "                       supported flags for rv32imc: zba, zcmp\n"
         "\n"
@@ -406,6 +406,22 @@ MP_NOINLINE int main_(int argc, char **argv) {
                 } else if (strcmp(arch, "rv64imc") == 0) {
                     mp_dynamic_compiler.native_arch = MP_NATIVE_ARCH_RV64IMC;
                     mp_dynamic_compiler.nlr_buf_num_regs = MICROPY_NLR_NUM_REGS_RV64I;
+                } else if (strcmp(arch, "m68k") == 0) {
+                    // Le code natif fige l'encodage des constantes (petits
+                    // entiers, None, qstr), qui depend de la representation
+                    // d'objets. Le port Atari est en REPR_B : un .mpy natif
+                    // produit par ce mpy-cross-ci (REPR_A) s'y chargerait sans
+                    // erreur puis calculerait faux. On refuse.
+                    #if MICROPY_OBJ_REPR != MICROPY_OBJ_REPR_B
+                    mp_printf(&mp_stderr_print, "-march=m68k needs the REPR_B mpy-cross: "
+                        "cd ports/atari && make mpy-cross-atari\n");
+                    exit(1);
+                    #endif
+                    // Le code m68k gere les exceptions par setjmp (voir
+                    // py/emitnm68k.c) : le nlr_buf_t de la cible contient le
+                    // jmp_buf de la MiNTlib, 14 mots longs.
+                    mp_dynamic_compiler.native_arch = MP_NATIVE_ARCH_M68K;
+                    mp_dynamic_compiler.nlr_buf_num_regs = 14;
                 } else if (strcmp(arch, "debug") == 0) {
                     mp_dynamic_compiler.native_arch = MP_NATIVE_ARCH_DEBUG;
                     mp_dynamic_compiler.nlr_buf_num_regs = 0;
