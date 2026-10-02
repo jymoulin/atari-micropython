@@ -1,3 +1,37 @@
+2026-10-02  ALLTEST.PY, et trois defauts d'alignement m68k corriges
+-----------------------------------------------------------
+Nouveau : tests/ALLTEST.PY lance tous les tests dans le meme interpreteur
+et resume (tableau + une ligne par configuration dans ALLTEST.SUM).
+tests/ALLGEM.PY = ALLTEST avec les tests GEM, pour MPYRUN.PRG.
+Options : gem, i2c, disk, dma, auto (Hatari), nobench, ou des noms de
+tests. HWTEST accepte "auto" (pas d'attente de touche en monochrome).
+BENCH.PY affiche FIN DU TEST.
+
+ALLTEST a trouve un vrai bogue : sur ST 68000, Address Error au premier
+"return" depuis un "try". La VM range des drapeaux dans les 2 bits bas des
+pointeurs de sa pile de valeurs (MP_TAGPTR_MAKE) ; il faut donc des etats
+de fonction alignes sur 4. Ils viennent du tas (GEMDOS rend 4n+2 sur un
+ST : heap 0xe29be) ou d'alloca (aligne sur 2 par gcc m68k).
+Corrections :
+- main.c : le tas du GC est aligne sur 16 octets aux deux bouts ;
+- mpconfigport.h : alloca prend 2 octets de plus et arrondit a 4 ;
+- main.c : gc_collect parcourt la pile C a 4n ET a 4n+2 (setjmp pour les
+  registres, au lieu de gchelper_generic). Sans ca, aligner alloca
+  decalait les etats de fonction par rapport au pas de lecture du GC :
+  objets vivants liberes, bus error sur TT des GCTEST suivi de FSTEST.
+  __builtin_alloca_with_align(size, 32) donnait la meme panne, pour la
+  meme raison (essaye puis abandonne).
+Test de non-regression : ITERTEST.PY, 5 cas de try/with/finally ajoutes
+(18 au total). L'ancien MPY00.TTP y fait une Address Error.
+SNDTEST : la duree se mesure depuis dmaplay et non plus apres les
+affichages (835 ms au lieu de ~1000 sous ALLTEST, TOS 2.06 en ST-RAM).
+Sous Hatari, ALLTEST complet :
+  MPY20 TT 68030 EmuTOS          11 ok (ALLGEM auto, mono : 13 ok)
+  MPY00 ST 68000 EmuTOS          10 ok (SNDTEST saute : pas de son DMA)
+  MPY20 STE 68020 TOS 2.06       11 ok (apres le correctif de SNDTEST)
+Le depot 1.28 a les memes defauts (latents : rien ne les a declenches sur
+le STE), non corriges puisqu'on n'y touche plus.
+
 2026-09-30  BENCH.PY sur le STE : 1.28 contre 1.29, 68020 contre 68000
 ---------------------------------------------------------------
 STE + TwiSTer, 68020 a 24 MHz, EmuTOS 1.4, cache actif, alt-RAM, STinG

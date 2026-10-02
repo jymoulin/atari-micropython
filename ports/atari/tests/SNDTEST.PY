@@ -23,8 +23,10 @@ def verifie(nom, condition, detail=""):
         print("   ECHEC %s %s" % (nom, detail))
 
 
-def attend_fin(limite_ms=5000):
-    t0 = time.ticks_ms()
+def attend_fin(t0, limite_ms=5000):
+    # t0 : pris juste apres dmaplay. Les affichages faits entre-temps
+    # prennent du temps (une centaine de ms sous ALLTEST.PY, en ST-RAM a
+    # 8 MHz) : mesurer depuis ici raccourcissait la duree d'autant.
     while machine.dmapos() is not None:
         if time.ticks_diff(time.ticks_ms(), t0) > limite_ms:
             machine.dmastop()
@@ -60,10 +62,11 @@ buf[:] = (une * (len(buf) // periode + 1))[:len(buf)]
 print("   remplissage : %d ms" % time.ticks_diff(time.ticks_ms(), t0))
 
 reel = machine.dmaplay(buf, rate=25000)
+t0 = time.ticks_ms()
 verifie("taux arrondi", reel == 25033, "%d Hz" % reel)
 pos = machine.dmapos()
 verifie("dmapos pendant la lecture", pos is not None, repr(pos))
-duree = attend_fin()
+duree = attend_fin(t0)
 print("   duree mesuree : %d ms (attendu ~1000)" % duree)
 verifie("duree", 850 <= duree <= 1250)
 verifie("dmapos apres la fin", machine.dmapos() is None)
@@ -78,7 +81,7 @@ for demande, attendu in ((8000, 6258), (12000, 12517), (44100, 50066)):
 print()
 print("--- stereo : la meme onde deux fois plus courte ---")
 machine.dmaplay(buf, rate=25033, stereo=True)
-duree = attend_fin()
+duree = attend_fin(time.ticks_ms())
 print("   duree mesuree : %d ms (attendu ~500)" % duree)
 verifie("duree stereo", 400 <= duree <= 650)
 

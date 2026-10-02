@@ -130,5 +130,65 @@ import gc
 gc.collect()
 check("apres collecte", serie() == reference, True)
 
+
+# Blocs try / with : la VM range deux drapeaux dans les bits bas de ses
+# pointeurs de pile (MP_TAGPTR_MAKE), qui doivent donc etre alignes sur 4.
+# Sur un ST (tas a 4n+2, alloca aligne sur 2), le premier "return" depuis un
+# "try" donnait une Address Error (02/10/2026) : ces cas-la.
+def petit(x):
+    try:
+        return x + 1
+    except ValueError:
+        return -1
+
+
+def gros(x):
+    # Assez de variables locales pour que l'etat de la fonction soit pris
+    # sur le tas plutot que sur la pile C.
+    a0 = a1 = a2 = a3 = a4 = a5 = a6 = a7 = a8 = a9 = x
+    b0 = b1 = b2 = b3 = b4 = b5 = b6 = b7 = b8 = b9 = x
+    c0 = c1 = c2 = c3 = c4 = c5 = c6 = c7 = c8 = c9 = x
+    l = [a0, a9, b0, b9, c0, c9]
+    try:
+        for i in It(3):
+            try:
+                if i == 2:
+                    return sum(l) + i
+            finally:
+                l.append(0)
+    except ValueError:
+        return -1
+
+
+class Ctx:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+def avec(x):
+    with Ctx():
+        for i in gen(5):
+            if i == x:
+                return i * 10
+    return -1
+
+
+def gen_try():
+    try:
+        yield 1
+        yield 2
+    finally:
+        pass
+
+
+check("return dans un try (petite fonction)", [petit(i) for i in range(3)], [1, 2, 3])
+check("return dans try/finally (grosse)", gros(5), 32)
+check("return dans un with", avec(3), 30)
+check("generateur avec finally", list(gen_try()), [1, 2])
+check("le tout, en profondeur", profond(9, lambda: (petit(1), gros(1), avec(2))), (2, 8, 20))
+
 print("BILAN : %d reussites, %d echecs" % (ok, ko))
 print("FIN DU TEST")

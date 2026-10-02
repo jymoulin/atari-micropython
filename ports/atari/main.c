@@ -586,7 +586,14 @@ static void vm_init(int argc, char **argv) {
         atari_report("heap self-test ok (-H)\r\n");
         tmark("autotest du tas");
     }
-    gc_init(heap, heap + heap_size);
+    // GEMDOS only promises an even address, and a plain ST hands out 4n+2
+    // (0xe29be under EmuTOS). The VM needs 4-byte aligned stack frames
+    // (see alloca in mpconfigport.h), and frames of big functions come from
+    // this heap: align both ends on 16 bytes, the GC block size. heap
+    // itself is left as GEMDOS gave it, for Mfree.
+    char *gc_start = (char *)(((unsigned long)heap + 15) & ~15UL);
+    char *gc_end = (char *)(((unsigned long)heap + heap_size) & ~15UL);
+    gc_init(gc_start, gc_end);
     TRACE("gc_init ok");
     mp_stack_ctrl_init();
     mp_stack_set_top(stack_top);
@@ -823,9 +830,28 @@ int main(int argc, char **argv) {
     return ret;
 }
 
+// The C stack is scanned at BOTH 2-byte offsets. m68k gcc only keeps the
+// stack 2-byte aligned, so a pointer held in a local may sit at an address
+// 4n or 4n+2, whatever the stack pointer is; the generic helper reads words
+// from the current stack pointer onwards and sees only one of the two. It
+// went unnoticed while locals and stack pointer shared their parity by
+// luck; aligning the VM's frames (alloca in mpconfigport.h) broke the luck,
+// and GCTEST followed by FSTEST then crashed on freed objects (02/10/2026).
+// Reading a long at 4n+2 is legal on every 680x0.
+#include <setjmp.h>
+
+static void __attribute__((noinline)) gc_collect_stack(void) {
+    jmp_buf regs;           // the callee-saved registers, in this frame
+    setjmp(regs);
+    uintptr_t lo = (uintptr_t)&regs & ~(uintptr_t)3;
+    uintptr_t top = (uintptr_t)MP_STATE_THREAD(stack_top);
+    gc_collect_root((void **)lo, (top - lo) / sizeof(void *));
+    gc_collect_root((void **)(lo + 2), (top - lo - 2) / sizeof(void *));
+}
+
 void gc_collect(void) {
     gc_collect_start();
-    gc_helper_collect_regs_and_stack();
+    gc_collect_stack();
     gc_collect_end();
 }
 

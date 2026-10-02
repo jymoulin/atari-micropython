@@ -527,8 +527,36 @@ POINTS OUVERTS / A VERIFIER SUR MATERIEL
    Makefile les repose explicitement. Pour le test DMA du point 1 :
    make PRGFLAGS=0x01, tout reste alors en ST-RAM sauf notre tas Mxalloc.
 
+TOUS LES TESTS D'UN COUP : tests/ALLTEST.PY
+-------------------------------------------
+  MPY20.TTP ALLTEST.PY                 automatiques, sans risque
+  MPY20.TTP ALLTEST.PY i2c disk dma    + tests de materiel (TwiSTer, IDE)
+  MPYRUN.PRG puis ALLGEM.PY            + GEMTEST, WINTEST, MENUTEST
+  MPY20.TTP ALLTEST.PY SMOKE BENCH     seulement ceux-la
+  hatari-test.sh ALLTEST.PY auto       sous Hatari (gestes GEM simules)
+Chaque test tourne dans le meme interpreteur, dans son propre espace de
+noms ; un print() intercepte compte les lignes ok / NON / ECHEC / BILAN.
+SNDTEST est saute sans son DMA (_SND), NATTEST sans NATMOD.MPY. A la fin :
+un tableau, et UNE LIGNE AJOUTEE A ALLTEST.SUM (configuration, version,
+resultats, chiffres de BENCH) : une ligne par configuration essayee.
+Ne JAMAIS mettre i2c ailleurs que sur la TwiSTer (bombes).
+
 A SAVOIR
 --------
+- PIEGE alignement m68k, corrige le 02/10/2026 (trouve par ALLTEST.PY) :
+  gcc m68k n'aligne la pile que sur 2 octets, et GEMDOS rend des blocs a
+  4n+2 sur un ST. Or la VM range deux drapeaux dans les bits bas de ses
+  pointeurs de pile (MP_TAGPTR_MAKE, blocs try/with) : un "return" depuis
+  un "try" donnait une Address Error sur 68000. Trois corrections :
+  1. le tas du GC est aligne sur 16 octets (main.c) ;
+  2. alloca, qui loge l'etat des petites fonctions, arrondit a 4
+     (mpconfigport.h ; PAS __builtin_alloca_with_align, voir 3) ;
+  3. le GC parcourt la pile C aux DEUX decalages, 4n et 4n+2 (gc_collect,
+     main.c) : un pointeur local peut etre a l'un ou a l'autre. Sans ca,
+     le point 2 faisait liberer des objets vivants (bus error sur TT apres
+     GCTEST puis FSTEST). Le depot 1.28 a les memes defauts, latents.
+  Reste theorique : un pointeur a 4n+2 DANS une structure du tas (champ
+  apres un uint16_t) echapperait au GC, qui lit le tas par mots de 4.
 - PIEGE MiNTlib/strcmp, corrige le 18/09/2026 : le binaire faisait 2,4 Mo
   au lieu de 485 Ko. MicroPython compresse ses messages d'erreur et compte
   sur gcc pour reduire un arbre de strcmp() a une constante a chaque

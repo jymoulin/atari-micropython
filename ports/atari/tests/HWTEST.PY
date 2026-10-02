@@ -65,8 +65,13 @@ if plans == 1:
     print("   dessin     : %d ms" % (time.ticks_ms() - t0))
 
     machine.Vsync()
-    print("   regarde l'ecran ! (une touche pour continuer)")
-    sys.stdin.read(1)
+    if "auto" in sys.argv[1:]:
+        # Sous Hatari (ALLTEST.PY auto) : personne pour appuyer.
+        print("   (auto : pas d'attente)")
+        time.sleep_ms(500)
+    else:
+        print("   regarde l'ecran ! (une touche pour continuer)")
+        sys.stdin.read(1)
 
     # Et on rend l'ecran tel qu'on l'a trouve.
     machine.memcpy(ecran, sauve, taille)

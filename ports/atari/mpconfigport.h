@@ -238,6 +238,19 @@ typedef long mp_off_t;
 
 #include <alloca.h>
 
+// The VM keeps two flag bits in the low bits of its value-stack pointers
+// (MP_TAGPTR_MAKE in py/bc.h, used by every try/with block), so the state of
+// a running function must be 4-byte aligned. Small functions get that state
+// from alloca(), which m68k gcc only aligns on 2 bytes. On a 68000 under
+// EmuTOS this gave an address error on the first "return" from inside a
+// "try" (02/10/2026, found by ALLTEST.PY). So take 2 bytes more and round
+// up by hand. NOT __builtin_alloca_with_align(size, 32): with it, m68k gcc
+// 13 builds code that crashes the TT after a few hundred collections
+// (GCTEST then FSTEST, bus error), whereas this version passes.
+#undef alloca
+#define alloca(size) \
+    ((void *)(((uintptr_t)__builtin_alloca((size) + 2) + 2) & ~(uintptr_t)3))
+
 #define MICROPY_HW_BOARD_NAME           "Atari"
 #if defined(__mc68020__)
 #define MICROPY_HW_MCU_NAME             "M68020"

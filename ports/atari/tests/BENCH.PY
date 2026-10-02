@@ -46,3 +46,4 @@ for i in range(4096):
     b[i] = i & 0xFF
 t = time.ticks_ms() - t0
 print("ecriture tableau : 4096 en %d ms = %d us/octet" % (t, t * 1000 // 4096))
+print("FIN DU TEST")
