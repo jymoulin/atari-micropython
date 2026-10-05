@@ -1,6 +1,6 @@
 # Emetteurs natif, viper et assembleur m68k (phase 9).
 #
-#   MPY.TTP VIPERTEST.PY
+#   MPY.TTP VIPTEST.PY
 #
 # Chaque fonction compilee en code machine est comparee a son equivalent en
 # Python ordinaire. Puis quelques mesures de vitesse.

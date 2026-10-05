@@ -291,7 +291,7 @@ charge sans erreur puis calcule faux (constaté : "int + str"). D'ou :
   mpy-cross/build-atari/mpy-cross -march=m68k -msmall-int-bits=30 x.py
 Le mpy-cross ordinaire refuse -march=m68k avec ce message. Compile SUR
 l'Atari, le code natif n'a pas ce probleme.
-Tests : tests/VIPERTEST.PY (28), tests/NATTEST.PY + make natmod (7).
+Tests : tests/VIPTEST.PY (28, ex-VIPERTEST : 9 lettres, tronque en VIPERTES.PY sur disque TOS), tests/NATTEST.PY + make natmod (7).
 Sous Hatari, STE 68020 a 8 MHz, 20000 tours de boucle vide : Python
 12 s, native 4,2 s, viper 0,2 s.
 Reste possible : le NLR natif (nlrm68k.c), plus rapide que setjmp.

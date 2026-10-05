@@ -5,7 +5,7 @@
 #   MPY20.TTP ALLTEST.PY i2c disk dma   en plus ceux qui demandent du materiel
 #   MPYRUN.PRG puis ALLGEM.PY           le meme, plus GEMTEST, WINTEST et
 #                                       MENUTEST (il faut le mode GEM)
-#   MPY20.TTP ALLTEST.PY SMOKE VIPERTEST    seulement ceux-la
+#   MPY20.TTP ALLTEST.PY SMOKE VIPTEST    seulement ceux-la
 #
 # Options :
 #   gem    GEMTEST, WINTEST, MENUTEST (interactifs : suivre leurs consignes)
@@ -66,7 +66,7 @@ TESTS = [
     ("PFTEST", [], True, ""),
     ("HWTEST", ["auto"] if "auto" in options else [], True, ""),
     ("SNDTEST", [], son_dma, "pas de son DMA (_SND)"),
-    ("VIPERTEST", [], True, ""),
+    ("VIPTEST", [], True, ""),
     ("NATTEST", [], existe("NATMOD.MPY"), "NATMOD.MPY absent"),
     ("DISKTEST", [], "disk" in options, "option disk"),
     ("DMATEST", [], "dma" in options, "option dma"),

@@ -1,3 +1,16 @@
+2026-10-05  Premiers ALLTEST sur la TwiSTer ; VIPERTEST devient VIPTEST
+-----------------------------------------------------------
+STE TwiSTer, EmuTOS 1.4 et TOS 2.06, 68020 a 8 et 24 MHz, et MPY00 en mode
+68000 sous TOS 2.06 : 10 tests ok sur 10 partout (SMOKE, ITERTEST 18,
+GCTEST, FSTEST 25, OSTEST, PFTEST, HWTEST, SNDTEST 12, NATTEST 7, BENCH).
+BENCH (us/tour vide / arithm. / us/octet tableau) :
+  68000  8 MHz TOS 2.06     711 / 1877 / 2148
+  68020  8 MHz TOS / EmuTOS 474 / 1118 / 1353   484 / 1140 / 1378
+  68020 24 MHz TOS / EmuTOS 228 /  536 /  656   230 /  541 /  661
+VIPERTEST.PY (9 lettres) etait "absent" : sur un disque TOS le nom est
+tronque en VIPERTES.PY (Hatari GEMDOS, lui, garde le nom long). Renomme
+tests/VIPTEST.PY.
+
 2026-10-02  ALLTEST.PY, et trois defauts d'alignement m68k corriges
 -----------------------------------------------------------
 Nouveau : tests/ALLTEST.PY lance tous les tests dans le meme interpreteur
