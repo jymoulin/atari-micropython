@@ -10,6 +10,9 @@ BENCH (us/tour vide / arithm. / us/octet tableau) :
 VIPERTEST.PY (9 lettres) etait "absent" : sur un disque TOS le nom est
 tronque en VIPERTES.PY (Hatari GEMDOS, lui, garde le nom long). Renomme
 tests/VIPTEST.PY.
+Falcon 68030 16 MHz + 68882, MagiC 6.20, MPY20 (ST-RAM seule) : 11 ok sur
+11, VIPTEST 28/28. BENCH 447 / 1051 / 1253. SNDTEST 11 : le garde-fou
+alt-RAM est sans objet sans alt-RAM.
 
 2026-10-02  ALLTEST.PY, et trois defauts d'alignement m68k corriges
 -----------------------------------------------------------
