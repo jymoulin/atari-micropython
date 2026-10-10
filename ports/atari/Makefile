@@ -107,6 +107,7 @@ SRC_C = \
 	machine_mem.c \
 	machine_uart.c machine_sound.c machine_disk.c modgem.c \
 	modzlib.c \
+	modsocket.c \
 	shared/readline/readline.c \
 	shared/runtime/pyexec.c \
 	shared/runtime/gchelper_generic.c \
@@ -116,7 +117,7 @@ SRC_C = \
 
 SRC_QSTR += shared/readline/readline.c shared/runtime/pyexec.c main.c modzlib.c
 SRC_QSTR += modatarios.c machine_atari.c machine_mem.c machine_uart.c
-SRC_QSTR += machine_sound.c machine_disk.c modgem.c
+SRC_QSTR += machine_sound.c machine_disk.c modgem.c modsocket.c
 
 # MiNTlib already provides printf and abort.
 SRC_EXTMOD_C := $(filter-out shared/libc/%.c,$(SRC_EXTMOD_C))

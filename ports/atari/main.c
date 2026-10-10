@@ -815,6 +815,11 @@ int main(int argc, char **argv) {
     }
 
     {
+        // what a script left open: STinG would keep it after we exit
+        extern void atari_socket_shutdown(void);
+        atari_socket_shutdown();
+    }
+    {
         extern void atari_sound_shutdown(void);
         atari_sound_shutdown();     // before the heap and its buffers go
     }

@@ -162,11 +162,43 @@ Phase 6   VDI, dialogues AES et fenetres -- FAITE. Sur le STE (23/09) en
           agrandies, recouvertes, refermees. Menus : MENUTEST 10/10
           sur le STE (28/09, tous les choix faits a la souris). PHASE 6
           COMPLETE
-Phase 7   reseau : STinG (TOS) ou MiNTnet (FreeMiNT)
+Phase 7   reseau : module socket sur STinG -- FAIT, NETTEST 26/26 sous
+          Hatari (TT, STE TOS 2.06, ST 68000) ; a valider sur machine
+          (net). MiNTnet (FreeMiNT) : plus tard
 Phase 8   TLS (BearSSL/mbedTLS) -- optionnel, lourd
 Phase 9   emetteurs natif, viper, asm_m68k -- FAITE, validee sur le STE
           (28/09/2026) : VIPERTEST 28/28, NATTEST 7/7, cache actif
 Abandonne ARexx (aucun equivalent Atari)
+
+PHASE 7 : LE MODULE socket (modsocket.c, sur STinG)
+---------------------------------------------------
+API des sockets de MicroPython : socket(), bind, listen, accept, connect,
+send, sendall, recv, sendto, recvfrom, settimeout, setblocking, makefile,
+read/readline/write, getsockname, getpeername, with ; getaddrinfo (DNS par
+STinG), inet_pton/ntop ; select.poll() marche dessus. socket.sting() donne
+(module, auteur, version) ou None. requests (micropython-lib) est gele :
+HTTP seulement, HTTPS attend TLS (phase 8).
+Appel du TPL : convention Pure C (arguments a leur taille, un int16 = un
+mot). Un trampoline asm (atari_sting_call) recopie un bloc de mots prepare
+par la macro TPL(idx, W(..), L(..)) : pas d'en-tete STinG a inclure.
+Ecarts avec BSD, dus a STinG :
+  - un handle = une connexion : accept() passe le handle au nouveau socket
+    et rouvre une ecoute sur le port. STinG-LW refuse cette reouverture
+    tant qu'une connexion occupe le port (tcp_bind sans SO_REUSE) : le
+    serveur ne sert qu'un client a la fois, et un client qui arrive
+    entre-temps est refuse. A corriger dans STinG-LW (SOF_REUSEADDR, ou
+    garder le pcb d'ecoute et mettre les connexions acceptees en file).
+  - UDP : un handle se fixe sur le premier correspondant ; sendto vers un
+    autre rouvre le handle (meme port local).
+  - pas de TCP_NODELAY (CN_setopt rend E_NOROUTINE) : send() decoupe en
+    segments entiers (4 x 1460) pour ne pas laisser Nagle retenir la fin.
+Les handles ouverts sont notes et fermes a la sortie (atari_socket_
+shutdown) : STinG les garderait sinon. Sur 68000, le GC coute plus que la
+pile : recv() n'alloue que ce qui est arrive ; preferer readinto() et des
+memoryview pour les gros transferts (55 Ko/s en boucle locale sur ST 8 MHz
+au lieu de 11).
+Test : tests/NETTEST.PY (boucle locale ; "net" : DNS, HTTP, requests).
+Sous Hatari : STING=1 ./hatari-test.sh NETTEST.PY (KIT de ToTest/sting).
 
 PHASE 6 : LE MODULE gem
 -----------------------

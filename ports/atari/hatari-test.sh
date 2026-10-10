@@ -12,6 +12,9 @@
 #       HCMDS   : touches envoyees depuis le Mac a des instants donnes
 #   ACSI=disque.img ./hatari-test.sh DISKTEST.PY C
 #   BIN=/tmp/autre/MPY.TTP ./hatari-test.sh BENCH.PY   # autre binaire
+#   STING=1 ./hatari-test.sh NETTEST.PY    # avec STinG (KIT de reference,
+#       ~/Downloads/ToTest/sting/KIT, ou STING=chemin du KIT) : AUTO\STING.PRG
+#       et C:\STING ; sans pilote reseau, seule la boucle 127.0.0.1 sert
 #
 # Commandes vers Hatari depuis le test : le script ecrit une commande de
 # controle Hatari dans C:\HATARI.CMD (par ex. "hatari-event keypress 28"
@@ -64,6 +67,14 @@ cp "$HERE/build/RUNTEST.PRG" "$D/"
 cp "$HERE"/tests/*.PY "$D/"
 # EXTRA : fichiers en plus (scripts de diagnostic ecrits dans /tmp, par ex.)
 for f in $EXTRA; do cp "$f" "$D/"; done
+if [ -n "$STING" ]; then
+    KIT=$STING; [ "$KIT" = 1 ] && KIT=$HOME/Downloads/ToTest/sting/KIT
+    mkdir -p "$D/AUTO" "$D/STING"
+    cp "$KIT/AUTO/STING.PRG" "$KIT/AUTO/STING.INF" "$D/AUTO/"
+    for f in "$KIT"/STING/*; do
+        case "$f" in */USB_NET.STX|*/CLI) ;; *) cp "$f" "$D/STING/" ;; esac
+    done
+fi
 printf -- '%s-l RESULT.TXT %s\r\n' "${QUIET:+-q }" "$*" > "$D/RUNTEST.ARG"
 
 rm -f "$FIFO"; mkdir -p "$SHOTS"

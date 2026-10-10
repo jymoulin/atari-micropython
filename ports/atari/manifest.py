@@ -1,6 +1,7 @@
 # Frozen modules for the Atari TOS port.
 #
-# Anything needing sockets (urequests, smtplib, email) waits for phase 5.
+# socket (modsocket.c, over STinG) is in C; requests rides on it (HTTP only:
+# HTTPS needs TLS, a later phase).
 #
 # We freeze base64.py directly (not via require()) to avoid pulling the
 # binascii.py shim from micropython-lib, which would shadow the C binascii
@@ -19,8 +20,9 @@ freeze("$(PORT_DIR)/modules", "gem.py")
 # freeze("$(PORT_DIR)/modules", "zlib.py")
 # freeze("$(PORT_DIR)/modules", "zipfile.py")
 
-# --- phase 5 (needs modsocket.c) ---
-# freeze("$(PORT_DIR)/modules", "urequests.py")
+require("requests")
+
+# --- reseau, pas encore portes ---
 # freeze("$(PORT_DIR)/modules", "smtplib.py")
 # freeze("$(PORT_DIR)/modules", "email/__init__.py")
 # freeze("$(PORT_DIR)/modules", "email/utils.py")

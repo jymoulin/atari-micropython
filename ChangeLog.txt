@@ -1,3 +1,18 @@
+2026-10-10  Phase 7 : module socket sur STinG
+-----------------------------------------------------------
+modsocket.c : socket TCP/UDP sur le TPL de STinG (cookie STiK), appele
+par un trampoline asm ; getaddrinfo, inet_pton/ntop, socket.sting().
+select.poll active (MICROPY_PY_SELECT), Ctrl-C pendant les attentes
+(MICROPY_INTERNAL_EVENT_HOOK). requests gele (HTTP). Handles fermes a la
+sortie. tests/NETTEST.PY (26 verifications en boucle locale, option net),
+ajoute a ALLTEST (si STinG est charge ; option net). hatari-test.sh :
+STING=1 installe le KIT STinG sur le disque emule.
+Sous Hatari, 26/26 : TT EmuTOS (266 Ko/s en boucle locale), STE 68020
+TOS 2.06 (44 Ko/s), ST 68000 avec MPY00 (22 Ko/s). Sans STinG : socket()
+leve OSError("STinG not loaded").
+Limite de STinG-LW : un seul client a la fois par port d'ecoute (voir
+README, phase 7).
+
 2026-10-05  Premiers ALLTEST sur la TwiSTer ; VIPERTEST devient VIPTEST
 -----------------------------------------------------------
 STE TwiSTer, EmuTOS 1.4 et TOS 2.06, 68020 a 8 et 24 MHz, et MPY00 en mode

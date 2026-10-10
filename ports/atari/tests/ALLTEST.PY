@@ -15,12 +15,13 @@
 #   dma    DMATEST : seulement depuis un vrai disque IDE
 #   auto   sous Hatari : les tests GEM simulent les gestes de l'utilisateur,
 #          et HWTEST n'attend pas de touche en monochrome
+#   net    NETTEST va aussi sur le reseau (DNS, HTTP vers example.com)
 #   nobench  sans BENCH a la fin
 #
 # Sans option, les tests qui dependent du materiel se choisissent seuls :
 # SNDTEST si le cookie _SND annonce le son DMA, NATTEST si NATMOD.MPY est
-# la. Chaque test s'execute dans ce meme interpreteur, dans son propre
-# espace de noms ; sa sortie s'affiche normalement, et ses lignes "ok",
+# la, NETTEST (boucle locale 127.0.0.1) si STinG est charge. Chaque test
+# s'execute dans ce meme interpreteur, dans son propre espace de noms ; sa sortie s'affiche normalement, et ses lignes "ok",
 # "NON", "ECHEC" et "BILAN" sont comptees au passage.
 #
 # A la fin : un tableau, et une ligne ajoutee a ALLTEST.SUM, qui garde
@@ -39,7 +40,7 @@ except ImportError:
 args = [a for a in sys.argv[1:]]
 options = set(a.lower() for a in args)
 choisis = [a.upper().replace(".PY", "") for a in args
-           if a.lower() not in ("gem", "i2c", "disk", "dma", "auto", "nobench")]
+           if a.lower() not in ("gem", "i2c", "disk", "dma", "auto", "net", "nobench")]
 
 
 def existe(nom):
@@ -57,6 +58,11 @@ def cookie(nom, defaut=0):
 
 # (nom, arguments, condition, raison si saute)
 son_dma = bool(cookie("_SND") & 2)
+try:
+    import socket
+    sting = socket.sting() is not None
+except ImportError:
+    sting = False
 TESTS = [
     ("SMOKE", [], True, ""),
     ("ITERTEST", [], True, ""),
@@ -68,6 +74,7 @@ TESTS = [
     ("SNDTEST", [], son_dma, "pas de son DMA (_SND)"),
     ("VIPTEST", [], True, ""),
     ("NATTEST", [], existe("NATMOD.MPY"), "NATMOD.MPY absent"),
+    ("NETTEST", ["net"] if "net" in options else [], sting, "STinG absent"),
     ("DISKTEST", [], "disk" in options, "option disk"),
     ("DMATEST", [], "dma" in options, "option dma"),
     ("I2CTEST", [], "i2c" in options, "option i2c"),

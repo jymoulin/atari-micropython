@@ -82,10 +82,10 @@ extern void *atari_commit_exec(void *buf, size_t len, void *reloc);
 #define MICROPY_PY_FFI                  (0)
 #define MICROPY_PY_TERMIOS              (0)
 #define MICROPY_PY_SIGNAL               (0)
-#define MICROPY_PY_SELECT               (0)
+#define MICROPY_PY_SELECT               (1)
 
-// Networking deferred to phase 5 (STinG on TOS, MiNTnet under FreeMiNT)
-#define MICROPY_PY_SOCKET               (0)
+// socket over STinG (modsocket.c). MiNTnet under FreeMiNT: not yet.
+#define MICROPY_PY_SOCKET               (1)
 #define MICROPY_PY_NETWORK              (0)
 #define MICROPY_PY_BLUETOOTH            (0)
 #define MICROPY_PY_LWIP                 (0)
@@ -188,6 +188,8 @@ extern void mp_atari_check_signals(void);
 #define MICROPY_VM_HOOK_POLL    if (--vm_hook_div == 0) { vm_hook_div = MICROPY_VM_HOOK_COUNT; mp_atari_check_signals(); }
 #define MICROPY_VM_HOOK_LOOP    MICROPY_VM_HOOK_POLL
 #define MICROPY_VM_HOOK_RETURN  MICROPY_VM_HOOK_POLL
+// Ctrl-C while select.poll() or a blocking socket call waits
+#define MICROPY_INTERNAL_EVENT_HOOK mp_atari_check_signals()
 
 // quit() and exit() builtins
 extern const struct _mp_obj_fun_builtin_var_t mp_builtin_quit_obj;
