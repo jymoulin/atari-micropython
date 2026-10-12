@@ -15,14 +15,14 @@ freeze("$(PORT_DIR)/modules", "os.py")
 freeze("$(PORT_DIR)/modules", "platform.py")
 freeze("$(PORT_DIR)/modules", "gem.py")
 
-# --- pas encore portes ---
+# --- not ported yet ---
 # freeze("$(PORT_DIR)/modules", "gzip.py")
 # freeze("$(PORT_DIR)/modules", "zlib.py")
 # freeze("$(PORT_DIR)/modules", "zipfile.py")
 
 require("requests")
 
-# --- reseau, pas encore portes ---
+# --- networking, not ported yet ---
 # freeze("$(PORT_DIR)/modules", "smtplib.py")
 # freeze("$(PORT_DIR)/modules", "email/__init__.py")
 # freeze("$(PORT_DIR)/modules", "email/utils.py")

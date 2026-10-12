@@ -1,10 +1,10 @@
-# Mesure du cout du hook Ctrl-C et de l'etat du cache.
-# Comparer MPY.TTP (hook tous les 64 opcodes) et MPY_H.TTP (tous les 4096).
+# Measures the cost of the Ctrl-C hook and the cache state.
+# Compare MPY.TTP (hook every 64 opcodes) and MPY_H.TTP (every 4096).
 import time
 import sys
 
-# Qui mesure quoi. En try : les anciennes versions (MPY_A, MPY_B) n'ont pas
-# toutes les memes fonctions de platform.
+# Who measures what. In a try: older versions (MPY_A, MPY_B) do not all
+# have the same platform functions.
 try:
     import platform
     print("systeme          :", platform.system(), platform.release())
@@ -14,9 +14,9 @@ try:
     import uos
     print("uname            :", uos.uname())
     print("multitache       :", platform.multitasking())
-    # La date de la ROM tranche : TOS 2.06 est de 1991, EmuTOS recent.
-    # (Redondant depuis que platform reconnait EmuTOS a son en-tete "ETOS",
-    # garde pour les anciens binaires.)
+    # The ROM date settles it: TOS 2.06 is from 1991, EmuTOS is recent.
+    # (Redundant since platform recognises EmuTOS by its "ETOS" header,
+    # kept for older binaries.)
     i = uos.osinfo()
     d = i["date"]
     print("ROM              : version %x, date (mm/jj/aaaa) %02x/%02x/%04x, EmuTOS %s" % (

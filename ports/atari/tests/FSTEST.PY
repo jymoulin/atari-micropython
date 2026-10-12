@@ -1,5 +1,5 @@
-# Test de la couche systeme de fichiers (phase 2).
-# Cree et detruit un sous-repertoire MPYTEST dans le repertoire courant.
+# Test of the file system layer (phase 2).
+# Creates and deletes a MPYTEST subdirectory in the current directory.
 
 import os
 import errno
@@ -50,8 +50,8 @@ try:
     os.mkdir(D)
     print("NON  mkdir en double n'a pas leve")
 except OSError as e:
-    # errno.EEXIST, pas 17 : la MiNTlib numerote ses erreurs d'apres les
-    # codes GEMDOS, donc EEXIST vaut 85 sur cette plateforme.
+    # errno.EEXIST, not 17: MiNTlib numbers its errors after the GEMDOS
+    # codes, so EEXIST is 85 on this platform.
     chk("mkdir en double", e.errno, errno.EEXIST)
 
 f = open(p.join(D, "HELLO.TXT"), "w")

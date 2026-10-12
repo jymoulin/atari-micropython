@@ -1,12 +1,12 @@
-# Barre de menus GEM : gem.App.menu, gem.Menu.
+# GEM menu bar: gem.App.menu, gem.Menu.
 #
-#   MPYRUN.PRG puis MENUTEST.PY       (il faut l'AES, et le mode GEM)
+#   MPYRUN.PRG then MENUTEST.PY       (needs the AES, and GEM mode)
 #
-# Partie automatique : le test s'envoie lui-meme les messages MN_SELECTED que
-# l'AES enverrait, et verifie rappels, titres re-normalises, coches et
-# entrees grisees en relisant l'arbre d'objets. Partie manuelle : ouvre les
-# menus a la souris, coche "Son", puis Fichier > Quitter.
-# Sous Hatari (argument "auto"), la fin est simulee.
+# Automatic part: the test sends itself the MN_SELECTED messages the AES
+# would send, and checks callbacks, titles reset to normal, check marks and
+# disabled entries by reading back the object tree. Manual part: open the
+# menus with the mouse, check "Son", then Fichier > Quitter.
+# Under Hatari (argument "auto"), the end is simulated.
 
 import gem
 import sys
@@ -74,8 +74,8 @@ with gem.App() as app:
 
     def choisit(titre, entree):
         t, e = m.title_obj(titre), m.item_obj(entree)
-        # L'AES met le titre en inverse video avant d'envoyer MN_SELECTED ;
-        # on le fait aussi, pour verifier qu'on le remet bien en normal.
+        # The AES puts the title in reverse video before sending MN_SELECTED;
+        # we do it too, to check that we set it back to normal.
         gem.aes(33, (t, 0), (m.addr,))
         gem._gem.appl_write(moi, (gem.MN_SELECTED, moi, 0, t, e, 0, 0, 0))
         app.run(timeout=800)
@@ -104,7 +104,7 @@ with gem.App() as app:
     except ValueError:
         verifie("libelle inconnu refuse", True)
 
-    # Manuel : jusqu'a Fichier > Quitter (app.stop). Trace des messages.
+    # Manual: until Fichier > Quitter (app.stop). Message trace.
     print()
     print("--- a toi : menus a la souris, Options > Son, puis Fichier > Quitter ---")
     app.trace = []

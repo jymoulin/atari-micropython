@@ -1,22 +1,22 @@
-/* RUNTEST.PRG -- lanceur pour les tests automatiques sous Hatari.
+/* RUNTEST.PRG -- launcher for automated tests under Hatari.
  *
- * Hatari sait demarrer un programme tout seul (--auto) et s'arreter apres
- * un nombre donne de VBL (--run-vbls), mais --auto ne passe aucun argument.
- * Ce lanceur lit donc sa ligne de commande dans RUNTEST.ARG, a cote de lui,
- * et lance MPY.TTP avec. Exemple de RUNTEST.ARG :
+ * Hatari can start a program on its own (--auto) and stop after a given
+ * number of VBLs (--run-vbls), but --auto passes no arguments. So this
+ * launcher reads its command line from RUNTEST.ARG, next to it, and
+ * launches MPY.TTP with it. Example RUNTEST.ARG:
  *     -l RESULT.TXT SMOKE.PY
- * Le journal -l arrive directement dans le dossier du Mac qui sert de disque
- * GEMDOS a Hatari : c'est lui qu'on relit, pas l'ecran.
+ * The -l log lands directly in the Mac folder that serves as Hatari's
+ * GEMDOS drive: that is what we read back, not the screen.
  *
- * Outil de developpement uniquement, rien a faire sur la vraie machine.
+ * Development tool only, it has no business on the real machine.
  */
 
 #include <mint/osbind.h>
 #include <string.h>
 
-/* Se placer sur le lecteur qui porte RUNTEST.ARG. Quand une image de disque
- * occupe C:, le disque GEMDOS de Hatari passe en D: ou plus loin, et rien ne
- * garantit que --auto nous y laisse comme lecteur courant. */
+/* Move to the drive that holds RUNTEST.ARG. When a disk image occupies
+ * C:, Hatari's GEMDOS drive moves to D: or further, and nothing
+ * guarantees that --auto leaves us there as the current drive. */
 static void aller_chez_soi(void) {
     long h = Fopen("RUNTEST.ARG", 0);
     if (h >= 0) {
@@ -56,7 +56,7 @@ int main(void) {
     if (n < 0) {
         n = 0;
     }
-    /* Couper a la premiere fin de ligne. */
+    /* Cut at the first end of line. */
     for (long i = 0; i < n; i++) {
         char c = tail[1 + i];
         if (c == '\r' || c == '\n') {
@@ -64,11 +64,11 @@ int main(void) {
             break;
         }
     }
-    tail[0] = (char)n;          /* ligne de commande GEMDOS : chaine Pascal */
+    tail[0] = (char)n;          /* GEMDOS command line: Pascal string */
     tail[1 + n] = '\0';
 
-    /* Heure (compteur 200 Hz) juste avant le lancement, pour que MPY -t
-     * puisse mesurer le chargement et la relocation, qui precedent main. */
+    /* Time (200 Hz counter) just before the launch, so that MPY -t
+     * can measure loading and relocation, which precede main. */
     {
         long t0 = Supexec(lire_hz200);
         long f = Fcreate("RUNTEST.T0", 0);
@@ -79,7 +79,7 @@ int main(void) {
     }
     long r = Pexec(0, "MPY.TTP", tail, NULL);
 
-    /* Le code de retour, pour le cas ou MPY.TTP n'aurait rien ecrit. */
+    /* The return code, in case MPY.TTP wrote nothing. */
     h = Fcreate("RUNTEST.RET", 0);
     if (h >= 0) {
         char buf[16];

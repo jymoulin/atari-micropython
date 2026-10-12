@@ -1,12 +1,12 @@
-# Le module d'horloge de la TwiSTer, de plus pres.
+# The TwiSTer clock module, up close.
 #
-# Le scan a rendu 0x68 ET 0x57 : ce n'est pas un DS1307 mais un module
-# DS3231 (le manuel de la carte le confirme), qui embarque en plus une
-# EEPROM AT24C32 de 4 Ko. Le DS3231 a aussi un capteur de temperature.
+# The scan returned 0x68 AND 0x57: this is not a DS1307 but a DS3231
+# module (the board manual confirms it), which also carries a 4 KB
+# AT24C32 EEPROM. The DS3231 also has a temperature sensor.
 #
-#   MPY.TTP RTCTEST.PY          lecture seule
-#   MPY.TTP RTCTEST.PY write    teste aussi l'ecriture EEPROM (reversible)
-#   MPY.TTP RTCTEST.PY sync     recale l'horloge GEMDOS sur le DS3231
+#   MPY.TTP RTCTEST.PY          read only
+#   MPY.TTP RTCTEST.PY write    also tests EEPROM writing (reversible)
+#   MPY.TTP RTCTEST.PY sync     sets the GEMDOS clock from the DS3231
 
 import machine
 import sys
@@ -25,7 +25,7 @@ def bcd(v):
 
 
 print("--- DS3231 : temperature ---")
-# Registres 0x11 (partie entiere, signee) et 0x12 (bits 7-6 = quarts de degre)
+# Registers 0x11 (integer part, signed) and 0x12 (bits 7-6 = quarter degrees)
 t = i2c.readfrom_mem(RTC, 0x11, 2)
 entier = t[0] if t[0] < 128 else t[0] - 256
 frac = (t[1] >> 6) * 25
@@ -56,9 +56,9 @@ except Exception as e:
     print("   lecture impossible :", e)
 
 if mode == "write":
-    # Cette EEPROM-la est celle du module d'horloge, et TOSWIT_4 n'y touche
-    # pas (il ecrit ailleurs, voir plus bas). On verifie quand meme que la
-    # zone visee est vierge avant d'y ecrire quoi que ce soit.
+    # This EEPROM is the clock module's one, and TOSWIT_4 does not touch it
+    # (it writes elsewhere, see below). Still, we check that the target
+    # area is blank before writing anything there.
     print("   verification que 0x100 est vierge...")
     try:
         avant = i2c.readfrom_mem(EEPROM, 0x100, 12, addrsize=16)
@@ -67,7 +67,7 @@ if mode == "write":
             print("   ecriture ANNULEE -- quelque chose occupe deja la place.")
         else:
             i2c.writeto_mem(EEPROM, 0x100, b"MicroPython!", addrsize=16)
-            time.sleep_ms(20)      # l'AT24C32 demande ~10 ms par page
+            time.sleep_ms(20)      # the AT24C32 needs ~10 ms per page
             back = i2c.readfrom_mem(EEPROM, 0x100, 12, addrsize=16)
             print("   relu :", bytes(back))
             print("   ", "ok" if bytes(back) == b"MicroPython!" else "NON, ecart")
@@ -78,16 +78,15 @@ else:
 
 print()
 print("--- 0x2C : NE PAS ECRIRE ---")
-# Le desassemblage de TOSWIT_4.TOS montre qu'il parle a DEUX composants sur
-# ces memes lignes : 0xD0/0xD1 (le DS3231) et 0x58/0x59, soit 0x2C. Et le
-# protocole de 0x2C n'est pas celui d'une EEPROM : l'octet qui suit l'adresse
-# est un octet de CONTROLE, construit par decalages et masques, et une
-# lecture rend 16 bits. C'est de la configuration de la carte -- tres
-# probablement la banque de ROM de demarrage, que TOSWIT sert justement a
-# changer.
+# Disassembling TOSWIT_4.TOS shows it talks to TWO devices on these same
+# lines: 0xD0/0xD1 (the DS3231) and 0x58/0x59, i.e. 0x2C. And the 0x2C
+# protocol is not an EEPROM one: the byte following the address is a
+# CONTROL byte, built with shifts and masks, and a read returns 16 bits.
+# This is board configuration -- most likely the boot ROM bank, which is
+# precisely what TOSWIT is for changing.
 #
-# On se contente donc d'une lecture nue, sans octet de controle : rien n'est
-# selectionne, rien n'est ecrit.
+# So we only do a bare read, without a control byte: nothing is selected,
+# nothing is written.
 try:
     d = i2c.readfrom(INCONNU, 2)
     print("   lecture nue, 2 octets :", " ".join("%02x" % b for b in d))

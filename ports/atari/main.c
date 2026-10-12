@@ -161,12 +161,12 @@ static int wait_before_exit = 0;
 // since part of what we want to watch happens after the log is closed.
 static int trace_exit = 0;
 
-// -q : rien a l'ecran (le journal, lui, recoit tout). Pour les programmes
-// GEM, dont les fenetres se font recouvrir par le moindre affichage console.
+// -q: nothing on screen (the log still receives everything). For GEM
+// programs, whose windows get overwritten by the slightest console output.
 extern int atari_quiet;
 
-// -t : duree de chaque etape du demarrage, en ms (compteur 200 Hz, donc
-// a 5 ms pres). Pour savoir ou passent les secondes d'attente au lancement.
+// -t: duration of each startup step, in ms (200 Hz counter, so accurate
+// to 5 ms). To find out where the seconds of waiting at launch go.
 static int time_startup = 0;
 static int test_heap = 0;       // -H
 static uint32_t t_last;
@@ -567,15 +567,15 @@ static void vm_init(int argc, char **argv) {
             exit(1);
         }
         tmark("allocation du tas");
-        // Pas de memset : le GC remet chaque bloc a zero en l'allouant
-        // (MICROPY_GC_CONSERVATIVE_CLEAR, py/gc.c). Il coutait 165 ms a
-        // 8 MHz sur le STE, pour rien.
+        // No memset: the GC zeroes each block when it allocates it
+        // (MICROPY_GC_CONSERVATIVE_CLEAR, py/gc.c). It cost 165 ms at
+        // 8 MHz on the STE, for nothing.
     }
     report_memory();
-    // -H : autotest du tas, ecriture puis relecture de tout le Mo. Il a servi
-    // a la chasse au probleme d'alignement en alt-RAM, resolu depuis ; il
-    // reste utile pour diagnostiquer une carte memoire douteuse, mais coutait
-    // 1,2 s a 8 MHz a chaque lancement.
+    // -H: heap self-test, writing then reading back the whole MB. It served
+    // in hunting down the alt-RAM alignment problem, since resolved; it
+    // remains useful to diagnose a dubious memory board, but cost
+    // 1.2 s at 8 MHz on every launch.
     if (test_heap) {
         if (!heap_selftest(heap, heap_size)) {
             printf("The GC heap does not hold what is written to it. Refusing to\r\n");
@@ -690,8 +690,8 @@ int main(int argc, char **argv) {
     // Measure the spin loop before anything else needs a microsecond delay.
     mp_atari_calibrate_delay();
 
-    // Les options, dans n'importe quel ordre, jusqu'au premier argument qui
-    // n'en est pas une (-c ou le nom du script).
+    // The options, in any order, up to the first argument that
+    // is not one (-c or the script name).
     while (argc >= 2 && argv[1][0] == '-' && argv[1][1] != '\0'
            && strcmp(argv[1], "-c") != 0) {
         const char *opt = argv[1];
@@ -735,8 +735,8 @@ int main(int argc, char **argv) {
     }
 
     if (time_startup) {
-        // Sous Hatari, RUNTEST.PRG note l'heure juste avant de nous lancer :
-        // la difference couvre le chargement et la relocation du binaire.
+        // Under Hatari, RUNTEST.PRG records the time just before launching us:
+        // the difference covers loading and relocating the binary.
         long f = Fopen("RUNTEST.T0", 0);
         if (f >= 0) {
             uint32_t t0 = 0;

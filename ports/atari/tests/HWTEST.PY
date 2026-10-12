@@ -1,8 +1,8 @@
-# Phase 5 : memoire, ecran, clavier, son, port serie.
+# Phase 5: memory, screen, keyboard, sound, serial port.
 #
-#   MPY.TTP HWTEST.PY          tout sauf le son et la serie
-#   MPY.TTP HWTEST.PY sound    ajoute un bip (ca s'entend)
-#   MPY.TTP HWTEST.PY serial   ajoute un essai du port RS-232
+#   MPY.TTP HWTEST.PY          everything except sound and serial
+#   MPY.TTP HWTEST.PY sound    adds a beep (audible)
+#   MPY.TTP HWTEST.PY serial   adds a test of the RS-232 port
 
 import machine
 import sys
@@ -11,8 +11,8 @@ import time
 mode = sys.argv[1] if len(sys.argv) > 1 else ""
 
 print("--- lecture de la memoire ---")
-# 0x4BA est le compteur a 200 Hz, sous 0x800 donc en espace protege :
-# machine.mem32 passe en superviseur tout seul.
+# 0x4BA is the 200 Hz counter, below 0x800 hence in protected space:
+# machine.mem32 switches to supervisor mode by itself.
 a = machine.mem32[0x4BA]
 time.sleep_ms(100)
 b = machine.mem32[0x4BA]
@@ -38,7 +38,7 @@ if plans == 1:
     ecran = machine.mem_buffer(adresse, taille)
     fb = framebuf.FrameBuffer(ecran, w, h, framebuf.MONO_HMSB)
 
-    # On sauvegarde l'ecran AVANT de le salir, pour rendre le bureau intact.
+    # Save the screen BEFORE messing it up, to give the desktop back intact.
     t0 = time.ticks_ms()
     sauve = bytearray(taille)
     machine.memcpy(sauve, ecran, taille)
@@ -66,14 +66,14 @@ if plans == 1:
 
     machine.Vsync()
     if "auto" in sys.argv[1:]:
-        # Sous Hatari (ALLTEST.PY auto) : personne pour appuyer.
+        # Under Hatari (ALLTEST.PY auto): nobody to press a key.
         print("   (auto : pas d'attente)")
         time.sleep_ms(500)
     else:
         print("   regarde l'ecran ! (une touche pour continuer)")
         sys.stdin.read(1)
 
-    # Et on rend l'ecran tel qu'on l'a trouve.
+    # And give the screen back as we found it.
     machine.memcpy(ecran, sauve, taille)
 else:
     print("   (en couleur les plans sont entrelaces : framebuf ne sait pas")
@@ -95,14 +95,14 @@ print("   couleur 0 :", hex(machine.Setcolor(0, -1)))
 if mode == "sound":
     print()
     print("--- son ---")
-    # Une macro Dosound : canal A, periode, volume, puis extinction.
+    # A Dosound macro: channel A, period, volume, then silence.
     bip = bytes([
-        0x00, 0x80, 0x01, 0x00,     # periode du canal A
-        0x07, 0xFE,                 # mixeur : canal A en tonalite
-        0x08, 0x0F,                 # volume A au maximum
-        0x80, 0x00,                 # temporisation
-        0x81, 0x08, 0x02,           # decroissance du volume
-        0xFF, 0x00,                 # fin
+        0x00, 0x80, 0x01, 0x00,     # channel A period
+        0x07, 0xFE,                 # mixer: channel A as tone
+        0x08, 0x0F,                 # volume A at maximum
+        0x80, 0x00,                 # delay
+        0x81, 0x08, 0x02,           # volume decay
+        0xFF, 0x00,                 # end
     ])
     machine.Dosound(bip)
     print("   bip envoye au YM2149")

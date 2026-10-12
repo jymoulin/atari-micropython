@@ -1,9 +1,9 @@
-# Emetteurs natif, viper et assembleur m68k (phase 9).
+# Native, viper and m68k assembler emitters (phase 9).
 #
 #   MPY.TTP VIPTEST.PY
 #
-# Chaque fonction compilee en code machine est comparee a son equivalent en
-# Python ordinaire. Puis quelques mesures de vitesse.
+# Each function compiled to machine code is compared with its equivalent in
+# plain Python. Then a few speed measurements.
 
 import micropython
 import gc
@@ -47,9 +47,9 @@ verifie("appel de Python, liste", n_appel(lambda v: [v, v * 2], 7), [7, 14, 3])
 
 @micropython.native
 def n_exceptions(n):
-    # Les exceptions passent par setjmp dans le code natif, et le compteur
-    # de boucle vit dans un registre sauve par setjmp : ce test verifie
-    # NLR_BUF_IDX_LOCAL_1, calcule d'apres le jmp_buf de la MiNTlib.
+    # Exceptions go through setjmp in native code, and the loop counter
+    # lives in a register saved by setjmp: this test checks
+    # NLR_BUF_IDX_LOCAL_1, computed from the MiNTlib jmp_buf.
     total = 0
     for i in range(n):
         try:
@@ -170,7 +170,7 @@ def v_cmp_nonsigne(a: uint, b: uint) -> int:
     return r
 
 
-# En non signe, 0xFFFFFFFF est le plus GRAND des entiers 32 bits.
+# Unsigned, 0xFFFFFFFF is the LARGEST 32-bit integer.
 verifie("comparaisons non signees 1, 0xFFFFFFFF",
         v_cmp_nonsigne(1, 0xFFFFFFFF), 1 | 4 | 32)
 verifie("comparaisons non signees 0xFFFFFFFF, 1",
@@ -180,7 +180,7 @@ verifie("comparaisons non signees 3, 3", v_cmp_nonsigne(3, 3), 4 | 8 | 16)
 
 @micropython.viper
 def v_booleen(a: int, b: int) -> int:
-    # Une comparaison vaut 1 ou 0, comme sur les autres architectures.
+    # A comparison yields 1 or 0, as on other architectures.
     return int(a < b) + int(a > b) * 10
 
 
@@ -201,8 +201,8 @@ def v_ptr(buf) -> int:
     p8 = ptr8(buf)
     p16 = ptr16(buf)
     p32 = ptr32(buf)
-    p32[1] = 0x11223344           # octets 4..7
-    s = p8[0] + p16[1] * 256      # lectures
+    p32[1] = 0x11223344           # bytes 4..7
+    s = p8[0] + p16[1] * 256      # reads
     return s
 
 
@@ -212,7 +212,7 @@ r = v_ptr(b)
 
 @micropython.viper
 def v_nonsigne(buf) -> int:
-    # ptr8 et ptr16 sont NON signes : 0xFF vaut 255, 0xFFFE vaut 65534.
+    # ptr8 and ptr16 are UNSIGNED: 0xFF is 255, 0xFFFE is 65534.
     return ptr8(buf)[0] + ptr16(buf)[1] * 1000
 
 
@@ -264,12 +264,12 @@ verifie("remplissage d'un bytearray", bytes(t), b"\x42" * 10 + b"\x00" * 6)
 
 print()
 print("--- cache d'instructions ---")
-# On fabrique 30 fonctions natives successives, en liberant chaque fois la
-# precedente : le GC reutilise la meme memoire, et chaque fonction doit rendre
-# SA valeur. ATTENTION, ce test ne prouve pas a lui seul le vidage du cache :
-# sous Hatari il passe aussi sans (verifie le 28/09/2026). Le cache
-# d'instructions du 68020 ne fait que 256 octets, et la compilation execute
-# assez d'autre code pour le purger. Il compte surtout sur 68040/060.
+# Build 30 successive native functions, freeing the previous one each time:
+# the GC reuses the same memory, and each function must return ITS own
+# value. WARNING, this test alone does not prove the cache flush: under
+# Hatari it also passes without it (checked on 28/09/2026). The 68020
+# instruction cache is only 256 bytes, and compilation runs enough other
+# code to purge it. It matters mostly on 68040/060.
 faux = 0
 for i in range(30):
     g = {}

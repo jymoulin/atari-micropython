@@ -1,4 +1,4 @@
-# Test de la couche plateforme (phase 3) : cookie jar et module platform.
+# Test of the platform layer (phase 3): cookie jar and platform module.
 
 import platform
 import uos
@@ -20,7 +20,7 @@ print("--- le cookie jar au complet ---")
 c = uos.cookies()
 for nom in sorted(c.keys()):
     v = c[nom]
-    # Beaucoup de cookies rangent deux mots de 16 bits, d'autres un pointeur.
+    # Many cookies hold two 16-bit words, others a pointer.
     print("   %-5s 0x%08x  (%d, %d)" % (nom, v, v >> 16, v & 0xFFFF))
 print("   %d cookies" % len(c))
 

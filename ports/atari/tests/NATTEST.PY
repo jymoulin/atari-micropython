@@ -1,11 +1,11 @@
-# Code natif PRECOMPILE : un .mpy produit sur le Mac par le mpy-cross du port.
+# PRECOMPILED native code: a .mpy produced on the Mac by the port's mpy-cross.
 #
 #   cd ports/atari && make natmod      -> build/NATMOD.MPY
-#   copier NATMOD.MPY a cote, puis : MPY.TTP NATTEST.PY
+#   copy NATMOD.MPY alongside, then: MPY.TTP NATTEST.PY
 #
-# Le mpy-cross doit etre celui du port (REPR_B, make mpy-cross-atari) : le
-# code natif fige l'encodage des constantes, et un module produit par le
-# mpy-cross ordinaire se chargerait sans erreur puis calculerait faux.
+# The mpy-cross must be the port's one (REPR_B, make mpy-cross-atari): native
+# code freezes the encoding of constants, and a module produced by the
+# ordinary mpy-cross would load without error and then compute wrong results.
 import sys
 sys.path.insert(0, "")
 import natmod

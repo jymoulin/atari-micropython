@@ -1,26 +1,27 @@
-/* MPYRUN.PRG -- lanceur GEM pour MicroPython.
+/* MPYRUN.PRG -- GEM launcher for MicroPython.
  *
- * POURQUOI : un programme TOS (.TTP) lance depuis le bureau n'obtient pas la
- * souris et voit son dessin recouvert par la console -- TOS passe l'ecran en
- * mode texte. L'extension .GTP regle cela sous TOS 2.06 et EmuTOS, mais
- * MagiC ne la connait pas. Un .PRG, lui, est lance en mode GEM par tous les
- * bureaux : celui-ci choisit le script, puis lance MPY20.TTP (68020 et plus)
- * ou MPY00.TTP (toute machine) avec, selon le processeur.
+ * WHY: a TOS program (.TTP) launched from the desktop does not get the
+ * mouse and sees its drawing overwritten by the console -- TOS switches the
+ * screen to text mode. The .GTP extension fixes that under TOS 2.06 and
+ * EmuTOS, but MagiC does not know it. A .PRG, on the other hand, is launched
+ * in GEM mode by every desktop: this one picks the script, then launches
+ * MPY20.TTP (68020 and up) or MPY00.TTP (any machine) with it, depending on
+ * the processor.
  *
- * Il se met dans le dossier du script choisi, passe -q (rien a l'ecran, les
- * fenetres GEM y tiendraient mal compagnie a la console) et -l <script>.LOG,
- * puis affiche le code de retour.
+ * It moves into the chosen script's folder, passes -q (nothing on screen,
+ * GEM windows would keep poor company with the console there) and
+ * -l <script>.LOG, then shows the return code.
  *
- * A poser a cote de MPY20.TTP et/ou MPY00.TTP.
+ * Put it next to MPY20.TTP and/or MPY00.TTP.
  */
 
 #include <gem.h>
 #include <mint/osbind.h>
 #include <string.h>
 
-/* Les binaires possibles, du meilleur au plus general. MPY20.TTP exige un
- * 68020 : il n'est essaye que si le cookie _CPU le permet. MPY.TTP est
- * l'ancien nom, garde pour ne pas casser une installation existante. */
+/* The possible binaries, from best to most general. MPY20.TTP requires a
+ * 68020: it is only tried if the _CPU cookie allows it. MPY.TTP is the
+ * old name, kept so as not to break an existing installation. */
 static const char *const progs[] = { "MPY20.TTP", "MPY00.TTP", "MPY.TTP" };
 
 #define EFILNF  (-33L)
@@ -46,7 +47,7 @@ static char tail[128];
 static char logname[128];
 static char message[200];
 
-/* Ajoute s a tail, qui est une chaine Pascal (octet de longueur en tete). */
+/* Append s to tail, which is a Pascal string (length byte first). */
 static void add(const char *s) {
     unsigned char n = (unsigned char)tail[0];
     size_t l = strlen(s);
@@ -67,14 +68,14 @@ int main(void) {
     short button = 0;
 
     if (appl_init() < 0) {
-        /* Sans AES, rien a faire ici : c'est tout l'interet du lanceur. */
+        /* No AES, nothing to do here: that is the launcher's whole point. */
         Cconws("MPYRUN a besoin du GEM. Lance MPY.TTP directement.\r\n");
         Cconin();
         return 1;
     }
     graf_mouse(ARROW, 0L);
 
-    /* Dossier courant -> "X:\chemin\*.PY" */
+    /* Current folder -> "X:\path\*.PY" */
     path[0] = (char)('A' + Dgetdrv());
     path[1] = ':';
     Dgetpath(path + 2, 0);
@@ -90,8 +91,8 @@ int main(void) {
         return 0;
     }
 
-    /* Se placer dans le dossier du script, pour que les chemins relatifs du
-     * script -- et le journal -- tombent au bon endroit. */
+    /* Move into the script's folder, so that the script's relative paths
+     * -- and the log -- end up in the right place. */
     {
         char *fin = strrchr(path, '\\');
         if (fin) {
@@ -103,7 +104,7 @@ int main(void) {
         Dsetpath(path + 2);
     }
 
-    /* <script>.LOG a cote du script */
+    /* <script>.LOG next to the script */
     strcpy(logname, name);
     {
         char *point = strrchr(logname, '.');
@@ -120,8 +121,8 @@ int main(void) {
     add(logname);
     add(name);
 
-    /* Rendre notre place d'application AES : sous un AES mono-tache, le fils
-     * en a besoin pour son propre appl_init. */
+    /* Give up our AES application slot: under a single-tasking AES, the child
+     * needs it for its own appl_init. */
     appl_exit();
     long ret = EFILNF;
     Supexec(read_cpu);
@@ -154,7 +155,7 @@ int main(void) {
         strcat(message, logname);
         strcat(message, "|Code ");
     }
-    {   /* code de retour en decimal */
+    {   /* return code in decimal */
         char n[12];
         int i = 0;
         long v = ret < 0 ? -ret : ret;

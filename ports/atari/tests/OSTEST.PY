@@ -1,5 +1,5 @@
-# Les derniers manques GEMDOS de la phase 5 :
-# putenv/unsetenv, utime (Fdatime) et dup/force/close (Fdup/Fforce).
+# The last GEMDOS gaps of phase 5:
+# putenv/unsetenv, utime (Fdatime) and dup/force/close (Fdup/Fforce).
 #
 #   MPY.TTP OSTEST.PY
 
@@ -8,10 +8,10 @@ import os
 import sys
 import time
 
-# La redirection de poignees a plante la machine deux fois, et la cause n'est
-# pas encore etablie : elle ne s'execute donc QUE sur demande explicite.
-#   MPY.TTP OSTEST.PY          tout sauf la redirection
-#   MPY.TTP OSTEST.PY force    ajoute la redirection
+# Handle redirection crashed the machine twice, and the cause is not yet
+# established: so it runs ONLY on explicit request.
+#   MPY.TTP OSTEST.PY          everything except redirection
+#   MPY.TTP OSTEST.PY force    adds redirection
 avec_force = "force" in sys.argv[1:]
 
 ok = 0
@@ -44,17 +44,17 @@ f = open("UTIME.TMP", "w")
 f.write("horodatage")
 f.close()
 
-# 1990-06-15 12:30:00 en temps local, converti en epoch par le module time.
+# 1990-06-15 12:30:00 in local time, converted to epoch by the time module.
 cible = time.mktime((1990, 6, 15, 12, 30, 0, 0, 0))
 uos.utime("UTIME.TMP", (cible, cible))
 lu = uos.stat("UTIME.TMP")[8]
 t = time.localtime(lu)
 print("   demande : 1990-06-15 12:30:00")
 print("   relu    : %04d-%02d-%02d %02d:%02d:%02d" % t[0:6])
-# GEMDOS ne garde les secondes que par pas de deux : 2 s d'ecart admis.
+# GEMDOS only keeps seconds in steps of two: a 2 s difference is allowed.
 verifie("utime", abs(lu - cible) <= 2, "ecart %d s" % (lu - cible))
 
-uos.utime("UTIME.TMP")          # sans argument : maintenant
+uos.utime("UTIME.TMP")          # no argument: now
 maintenant = uos.stat("UTIME.TMP")[8]
 verifie("utime sans argument", abs(maintenant - time.time()) <= 3)
 
@@ -64,24 +64,24 @@ if not avec_force:
     print("   ignoree. Relancer avec l'argument  force  pour l'inclure,")
     print("   et seulement apres que FORCETST.TTP soit passe sans bombe.")
 else:
-    # On detourne la poignee 1 -- notre propre sortie -- vers un fichier, on
-    # ecrit, puis on la remet en place.
+    # Redirect handle 1 -- our own output -- to a file, write, then put it
+    # back.
     #
-    # os.redirect ne ferme JAMAIS la poignee sauvee : sous TOS et EmuTOS,
-    # Fforce ne prend pas de reference, et fermer la poignee sauvee apres
-    # l'avoir remise en place fait redemarrer la machine (constate le
-    # 15/09/2026). Cela n'a pas suffi : le 16/09, trois bombes en MPY.TTP et
-    # deux en MPY_STR.TTP au meme endroit. FORCETST.TTP sert a savoir lequel
-    # des deux appels est en cause.
+    # os.redirect NEVER closes the saved handle: under TOS and EmuTOS,
+    # Fforce does not take a reference, and closing the saved handle after
+    # restoring it reboots the machine (observed on 15/09/2026). That was
+    # not enough: on 16/09, three bombs with MPY.TTP and two with
+    # MPY_STR.TTP at the same place. FORCETST.TTP is there to find out which
+    # of the two calls is at fault.
     sortie = open("FORCE.TMP", "w")
     with os.redirect(1, sortie):
         print("CECI VA DANS LE FICHIER")
     sortie.close()
 
-    # "with" et pas open(...).read() : MicroPython ne compte pas les
-    # references, un fichier non ferme le reste jusqu'au passage du GC.
-    # TOS laisse effacer un fichier ouvert ; MagiC refuse, et il a raison
-    # (EACCES a la ligne du remove, constate le 21/09/2026).
+    # "with" and not open(...).read(): MicroPython does not refcount, an
+    # unclosed file stays open until the GC runs.
+    # TOS lets you delete an open file; MagiC refuses, and rightly so
+    # (EACCES on the remove line, observed on 21/09/2026).
     with open("FORCE.TMP", "r") as f:
         contenu = f.read()
     verifie("redirection vers un fichier", "CECI VA DANS LE FICHIER" in contenu,

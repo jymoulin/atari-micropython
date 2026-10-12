@@ -209,10 +209,10 @@ void asm_m68k_st32_reg_reg(asm_m68k_t *as, uint rs, uint rbase);
 
 #define ASM_T               asm_m68k_t
 #define ASM_END_PASS        asm_m68k_end_pass
-// v1.28 : ASM_ENTRY recoit aussi le nom qualifie de la fonction (ignore ici).
+// v1.28: ASM_ENTRY also receives the function's qualified name (ignored here).
 #define ASM_ENTRY(as, num_locals, name) asm_m68k_entry((as), (num_locals))
-// v1.28 : mise a zero d'un registre. Toujours un registre de donnees ici
-// (REG_RET, REG_ARG_x et REG_TEMPx sont d0-d3), d'ou moveq #0.
+// v1.28: clearing a register. Always a data register here
+// (REG_RET, REG_ARG_x and REG_TEMPx are d0-d3), hence moveq #0.
 #define ASM_CLR_REG(as, reg) asm_m68k_mov_reg_imm((as), (reg), 0)
 #define ASM_EXIT            asm_m68k_exit
 

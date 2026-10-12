@@ -1,12 +1,12 @@
-# Fenetres GEM et boucle d'evenements : gem.App, gem.Window.
+# GEM windows and event loop: gem.App, gem.Window.
 #
-#   MPY.TTP WINTEST.PY          depuis le bureau (il faut l'AES)
+#   MPY.TTP WINTEST.PY          from the desktop (needs the AES)
 #
-# Le test s'envoie a lui-meme (appl_write) les messages que l'AES enverrait
-# -- redessin, deplacement, plein ecran, fermeture -- et verifie l'effet de
-# chacun, pixels compris. A la fin, une fenetre reste ouverte pour la main :
-# deplace-la, agrandis-la, tape une touche, puis ferme-la par sa case.
-# Sous Hatari (argument "auto"), la touche et la fermeture sont simulees.
+# The test sends itself (appl_write) the messages the AES would send
+# -- redraw, move, full screen, close -- and checks the effect of each,
+# pixels included. At the end, a window stays open for manual testing:
+# move it, resize it, press a key, then close it with its close box.
+# Under Hatari (argument "auto"), the key and the close are simulated.
 
 import gem
 import sys
@@ -16,7 +16,7 @@ import uos
 auto = "auto" in sys.argv[1:]
 ok = 0
 ko = 0
-differe = []        # rien a l'ecran pendant les verifications de pixels
+differe = []        # nothing on screen during pixel checks
 
 
 def verifie(nom, condition, detail=""):
@@ -55,7 +55,7 @@ dessins = [0]
 def dessine(c, x, y, w, h):
     dessins[0] += 1
     c.color(fill=0)
-    c.fill_rect(x, y, x + w - 1, y + h - 1)          # fond blanc
+    c.fill_rect(x, y, x + w - 1, y + h - 1)          # white background
     c.color(fill=1, line=1, text=1)
     c.fill_rect(x + w // 2 - 10, y + h // 2 - 10, x + w // 2 + 10, y + h // 2 + 10)
     c.rect(x + 2, y + 2, x + w - 3, y + h - 3)
@@ -80,7 +80,7 @@ with gem.App() as app:
             x >= r[0] and y > r[1] and x + ww <= r[0] + r[2] and y + hh <= r[1] + r[3],
             "%r" % ((x, y, ww, hh),))
 
-    # 1. Redessin demande a l'AES, traite par la boucle
+    # 1. Redraw requested from the AES, handled by the loop
     w.invalidate()
     app.run(timeout=1000)
     verifie("WM_REDRAW traite", dessins[0] >= 1, "%d appels" % dessins[0])
@@ -88,9 +88,9 @@ with gem.App() as app:
     verifie("contenu : carre central", app.canvas.pixel(cx, cy) == 1)
     verifie("contenu : fond", app.canvas.pixel(x + ww // 4, y + hh * 3 // 4) == 0)
 
-    # 2. Deuxieme fenetre par-dessus, puis fermee par message
-    # Placee pour que sa ZONE DE TRAVAIL, et pas sa barre de titre, couvre
-    # le carre central de la premiere.
+    # 2. Second window on top, then closed by message
+    # Placed so that its WORK AREA, not its title bar, covers the central
+    # square of the first one.
     w2 = app.window("seconde", cx - 30, cy - 40, dw // 3, dh // 3)
     w2.on_draw = lambda c, a, b, cw, ch: (c.color(fill=0),
                                           c.fill_rect(a, b, a + cw - 1, b + ch - 1))
@@ -106,21 +106,21 @@ with gem.App() as app:
     verifie("la premiere est redessinee dessous", app.canvas.pixel(cx, cy) == 1)
     w2.delete()
 
-    # 3. Deplacement par message
+    # 3. Move by message
     avant = dessins[0]
     nx, ny = r[0] + 30, r[1] + 20
     gem._gem.appl_write(moi, (gem.WM_MOVED, moi, 0, w.handle, nx, ny, r[2], r[3]))
     app.run(timeout=1000)
     r2 = w.rect
-    # L'AES peut ajuster la position (TOS 2.06 a pose y = 62 pour 59 demande,
-    # sur le STE) : on veut qu'elle ait bouge, pas un pixel pres.
+    # The AES may adjust the position (TOS 2.06 set y = 62 for 59 requested,
+    # on the STE): we want it to have moved, not pixel-exact.
     verifie("WM_MOVED", abs(r2[0] - nx) <= 8 and abs(r2[1] - ny) <= 8,
             "%r pour (%d, %d)" % (r2, nx, ny))
     x, y, ww, hh = w.work
     verifie("contenu suit le deplacement",
             app.canvas.pixel(x + ww // 2, y + hh // 2) == 1)
 
-    # 4. Plein ecran puis retour
+    # 4. Full screen then back
     gem._gem.appl_write(moi, (gem.WM_FULLED, moi, 0, w.handle, 0, 0, 0, 0))
     app.run(timeout=1000)
     plein = w.rect
@@ -129,11 +129,10 @@ with gem.App() as app:
     app.run(timeout=1000)
     verifie("WM_FULLED revient", tuple(w.rect) == tuple(r2), "%r" % (w.rect,))
 
-    # Signale sous EmuTOS sur le STE : apres plein ecran puis retour, la
-    # fenetre ne se laissait plus deplacer. Sans souris sous Hatari, on
-    # verifie ce qui depend de nous : la fenetre est toujours au premier plan
-    # (sinon l'AES ne lui transmet pas le glisser), et un WM_MOVED est encore
-    # applique.
+    # Reported under EmuTOS on the STE: after full screen then back, the
+    # window could no longer be moved. Without a mouse under Hatari, we
+    # check what depends on us: the window is still on top (otherwise the
+    # AES does not pass it the drag), and a WM_MOVED is still applied.
     haut = gem._wind_get(0, gem.WF_TOP)[0]
     verifie("toujours au premier plan", haut == w.handle, "top = %d" % haut)
     r3 = w.rect
@@ -145,21 +144,21 @@ with gem.App() as app:
 
     hatari("hatari-shortcut screenshot")
 
-    # 5. La main : touche, puis fermeture par la case
+    # 5. Manual: key, then close via the close box
     for ligne in differe:
         print(ligne)
     differe = None
     print()
     print("--- a toi : deplace, agrandis, tape une touche, puis ferme la fenetre ---")
     touches = []
-    # La consigne va dans la LIGNE D'INFO de la fenetre : avec -q rien ne
-    # s'affiche a l'ecran, et la consigne restait invisible.
+    # The instruction goes in the window's INFO LINE: with -q nothing is
+    # shown on screen, and the instruction stayed invisible.
     w.info("deplace, agrandis, tape une touche, puis ferme cette fenetre")
     app.on_key = lambda k: (touches.append(k), w.info("touche 0x%04x -- ferme la fenetre" % k))
     if auto:
-        # On attend la touche elle-meme, pas une duree : en avance rapide,
-        # Hatari fait passer ~10 s emulees par seconde reelle sur un STE, et
-        # la touche arrivait apres une attente de 3 s.
+        # Wait for the key itself, not a duration: in fast-forward, Hatari
+        # runs ~10 emulated s per real second on a STE, and the key arrived
+        # after a 3 s wait.
         def touche_auto(k):
             touches.append(k)
             app.stop()
@@ -167,10 +166,10 @@ with gem.App() as app:
         hatari("hatari-event keypress a", attendre=False)
         app.run(timeout=60000)
         gem._gem.appl_write(moi, (gem.WM_CLOSED, moi, 0, w.handle, 0, 0, 0, 0))
-    # Chaque message AES de la phase manuelle part au journal : si la
-    # fenetre refuse de bouger, on saura si l'AES a envoye WM_MOVED.
+    # Every AES message of the manual phase goes to the log: if the
+    # window refuses to move, we will know whether the AES sent WM_MOVED.
     app.trace = []
-    app.run()                       # rend la main quand la fenetre est fermee
+    app.run()                       # returns when the window is closed
     noms = {20: "REDRAW", 21: "TOPPED", 22: "CLOSED", 23: "FULLED",
             27: "SIZED", 28: "MOVED", 29: "NEWTOP", 50: "AP_TERM"}
     print("   messages AES recus a la main : %d" % len(app.trace))

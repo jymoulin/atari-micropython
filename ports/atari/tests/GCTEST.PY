@@ -1,10 +1,10 @@
-# Le ramasse-miettes : des objets gardes doivent survivre aux collectes.
+# The garbage collector: objects that are kept must survive collections.
 #
 #   MPY.TTP GCTEST.PY
 #
-# Ecrit le 21/09/2026 apres un NameError sur une variable globale pourtant
-# definie : le GC ne reconnaissait aucun pointeur quand la fin du tas
-# n'etait pas alignee sur 16 octets, et liberait donc tout ce qui vivait.
+# Written on 21/09/2026 after a NameError on a global variable that was
+# defined: the GC recognised no pointer when the end of the heap was not
+# 16-byte aligned, and therefore freed everything that was alive.
 
 import gc
 
@@ -15,7 +15,7 @@ temoin = "une chaine qui doit survivre"
 
 print("tas : %d libres, %d utilises" % (gc.mem_free(), gc.mem_alloc()))
 
-# Des dechets en quantite, pour forcer plusieurs collectes implicites.
+# Plenty of garbage, to force several implicit collections.
 for tour in range(6):
     dechets = [bytearray(1024) for _ in range(200)]
     dechets = None

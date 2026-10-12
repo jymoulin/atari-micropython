@@ -1,3 +1,12 @@
+2026-10-12  Commentaires du code en anglais
+-----------------------------------------------------------
+Tous les commentaires et docstrings francais des sources du port
+(ports/atari : C, Makefiles, scripts, modules, tests) et de py/asmm68k.*,
+py/emitnm68k.c traduits en anglais (39 fichiers). Code inchange (verifie
+par comparaison sans commentaires / AST) ; MPY20, MPY00 et outils
+recompiles. Restent en francais : messages affiches, marqueurs de test
+(ok/ECHEC/BILAN), identifiants (gem.py, main.c...).
+
 2026-10-10  Phase 7 : module socket sur STinG
 -----------------------------------------------------------
 modsocket.c : socket TCP/UDP sur le TPL de STinG (cookie STiK), appele

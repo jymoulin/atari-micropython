@@ -93,7 +93,7 @@ CFLAGS += -fdata-sections -ffunction-sections
 CFLAGS += -Wno-error
 
 LDFLAGS += $(LD_CPU_FLAGS) -Wl,--gc-sections
-# gemlib (MiNTlib) : VDI et AES pour modgem.c
+# gemlib (MiNTlib): VDI and AES for modgem.c
 LIBS += -lgem -lm
 
 CSUPEROPT = -Os
@@ -168,14 +168,14 @@ $(BUILD)/$(MPY_TTP): $(BUILD)/$(PROG)
 	$(Q)$(CROSS_COMPILE)flags -f $(PRGFLAGS) $@
 	$(ECHO) "Ready: $@ (PRGFLAGS=$(PRGFLAGS))"
 
-# --- Code natif precompile ---------------------------------------------------
-# Un .mpy contenant du code natif (@native, @viper, @asm_m68k) doit etre
-# produit par un mpy-cross qui partage la representation d'objets du port,
-# REPR_B : le code natif fige l'encodage des constantes. Le mpy-cross
-# ordinaire refuse -march=m68k pour cette raison.
+# --- Precompiled native code -------------------------------------------------
+# A .mpy containing native code (@native, @viper, @asm_m68k) must be
+# produced by an mpy-cross that shares the port's object representation,
+# REPR_B: native code bakes in the encoding of constants. The ordinary
+# mpy-cross refuses -march=m68k for that reason.
 #   make mpy-cross-atari
 #   ../../mpy-cross/build-atari/mpy-cross -march=m68k -msmall-int-bits=30 x.py
-#   make natmod            (tests/natmod.py -> build/NATMOD.MPY, pour NATTEST)
+#   make natmod            (tests/natmod.py -> build/NATMOD.MPY, for NATTEST)
 MPY_CROSS_ATARI = $(TOP)/mpy-cross/build-atari/mpy-cross
 
 mpy-cross-atari: $(MPY_CROSS_ATARI)

@@ -1,10 +1,10 @@
-# Son DMA du STE / TT : machine.stram, dmaplay, dmapos, dmastop.
+# STE / TT DMA sound: machine.stram, dmaplay, dmapos, dmastop.
 #
 #   MPY.TTP SNDTEST.PY
 #
-# Joue un la (440 Hz) d'une seconde, puis le meme en stereo et en boucle.
-# Sur la vraie machine, on doit l'ENTENDRE : c'est le vrai test. La duree
-# mesuree dit si la puce lit bien a la cadence annoncee.
+# Plays a one-second A (440 Hz), then the same in stereo and looped.
+# On the real machine, you must HEAR it: that is the real test. The
+# measured duration tells whether the chip reads at the announced rate.
 
 import machine
 import time
@@ -24,9 +24,9 @@ def verifie(nom, condition, detail=""):
 
 
 def attend_fin(t0, limite_ms=5000):
-    # t0 : pris juste apres dmaplay. Les affichages faits entre-temps
-    # prennent du temps (une centaine de ms sous ALLTEST.PY, en ST-RAM a
-    # 8 MHz) : mesurer depuis ici raccourcissait la duree d'autant.
+    # t0: taken right after dmaplay. The output printed in between takes
+    # time (about a hundred ms under ALLTEST.PY, in ST-RAM at 8 MHz):
+    # measuring from here shortened the duration by as much.
     while machine.dmapos() is not None:
         if time.ticks_diff(time.ticks_ms(), t0) > limite_ms:
             machine.dmastop()
@@ -35,8 +35,8 @@ def attend_fin(t0, limite_ms=5000):
 
 
 print("--- garde-fou : un tampon hors ST-RAM doit etre refuse ---")
-# Le tas est en RAM alternative (sauf -s) : un bytearray ordinaire n'est pas
-# lisible par la DMA, et le port doit le dire au lieu de jouer du bruit.
+# The heap is in alternate RAM (except with -s): an ordinary bytearray is not
+# readable by the DMA, and the port must say so instead of playing noise.
 try:
     machine.dmaplay(bytearray(1000))
     machine.dmastop()
@@ -50,11 +50,11 @@ TAUX = 25033
 buf = machine.stram(TAUX)
 verifie("stram", len(buf) == TAUX + (TAUX & 1), "%d octets" % len(buf))
 
-# Onde carree : 8 bits signes, donc -60..+60 en complement a deux.
-# On construit UNE periode, puis on la repete : une boucle Python par
-# echantillon prendrait des dizaines de secondes sur un STE a 8 MHz.
-# L'affectation par tranche garde la longueur exacte : buf est un tampon
-# en ST-RAM pris par reference, il ne doit surtout pas etre redimensionne.
+# Square wave: signed 8 bits, so -60..+60 in two's complement.
+# Build ONE period, then repeat it: a Python loop per sample would take
+# tens of seconds on an 8 MHz STE.
+# Slice assignment keeps the exact length: buf is a ST-RAM buffer held
+# by reference, it must never be resized.
 periode = TAUX // 440
 une = bytes((60 if i < periode // 2 else -60) & 0xFF for i in range(periode))
 t0 = time.ticks_ms()

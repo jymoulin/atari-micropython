@@ -1,9 +1,9 @@
-# ALLTEST.PY avec les tests GEM : a lancer par MPYRUN.PRG (ou MPY20.GTP),
-# qui ne sait pas passer d'arguments au script. GEMTEST, WINTEST et
-# MENUTEST demandent quelques gestes : suivre leurs consignes a l'ecran.
+# ALLTEST.PY with the GEM tests: to be started from MPYRUN.PRG (or MPY20.GTP),
+# which cannot pass arguments to the script. GEMTEST, WINTEST and
+# MENUTEST need a few user actions: follow their on-screen instructions.
 #
-#   MPYRUN.PRG, puis choisir ALLGEM.PY
-#   MPY20.TTP ALLGEM.PY i2c       les options d'ALLTEST.PY marchent aussi
+#   MPYRUN.PRG, then choose ALLGEM.PY
+#   MPY20.TTP ALLGEM.PY i2c       ALLTEST.PY options work too
 
 import sys
 

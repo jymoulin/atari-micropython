@@ -1,31 +1,31 @@
-/* FORCETST.TTP -- isoler ce qui plante dans Fdup / Fforce.
+/* FORCETST.TTP -- isolate what crashes in Fdup / Fforce.
  *
- * MPY.TTP OSTEST.PY a fait redemarrer le STE, puis plante en bombes une fois
- * le Fclose fautif retire : trois bombes en RAM alternative, deux en ST-RAM,
- * soit erreur d'adresse et erreur de bus. Un numero de vecteur qui change
- * avec la RAM ou tourne le programme sent le pointeur fou.
+ * MPY.TTP OSTEST.PY rebooted the STE, then crashed with bombs once the
+ * faulty Fclose was removed: three bombs in alternate RAM, two in ST-RAM,
+ * i.e. address error and bus error. A vector number that changes with the
+ * RAM the program runs in smells of a wild pointer.
  *
- * Les sources de la MiNTlib (~/Downloads/github/atari-mintlib) ont depuis
- * elimine une hypothese : unix/open.c rend directement la valeur de Fopen(),
- * donc les descripteurs de la MiNTlib SONT des poignees GEMDOS et Fforce
- * recoit bien un numero valide. L'etape 4 ci-dessous ne fait plus que le
- * confirmer sur la machine.
+ * The MiNTlib sources (~/Downloads/github/atari-mintlib) have since
+ * ruled out one hypothesis: unix/open.c returns the value of Fopen()
+ * directly, so MiNTlib descriptors ARE GEMDOS handles and Fforce does
+ * receive a valid number. Step 4 below only confirms it on the
+ * machine.
  *
- * Elles en ont aussi ouvert une autre : posix/system.c et stdio/popen.c font
- * exactement la sequence Fdup / Fforce / Fforce / Fclose, Fclose compris. La
- * MiNTlib la tient donc pour licite, alors qu'elle a fait redemarrer cette
- * machine-ci. Et unix/dup2.c porte cet avertissement : "use with caution,
- * TOS 1.4 still has double re-direction bug!". Reste donc a savoir si c'est
- * TOS, ou Geneva qui virtualise GEMDOS par-dessus.
+ * They also opened another one: posix/system.c and stdio/popen.c do
+ * exactly the sequence Fdup / Fforce / Fforce / Fclose, Fclose included. So
+ * MiNTlib considers it legal, even though it rebooted this very machine.
+ * And unix/dup2.c carries this warning: "use with caution,
+ * TOS 1.4 still has double re-direction bug!". So it remains to find out
+ * whether it is TOS, or Geneva virtualising GEMDOS on top of it.
  *
- *   FORCETST      affiche l'aide
- *   FORCETST 1    Fdup(1) seul, rien d'autre
- *   FORCETST 2    Fdup + Fforce aller-retour, SANS ecrire entre les deux
- *   FORCETST 3    idem mais avec une ecriture pendant la redirection
- *   FORCETST 4    compare la numerotation de Fcreate et de open()
+ *   FORCETST      show the help
+ *   FORCETST 1    Fdup(1) alone, nothing else
+ *   FORCETST 2    Fdup + Fforce round trip, WITHOUT writing in between
+ *   FORCETST 3    same but with a write during the redirection
+ *   FORCETST 4    compare the numbering of Fcreate and of open()
  *
- * Aucune etape ne ferme la poignee sauvee : c'est cela qui avait fait
- * redemarrer la machine le 15/09, et c'est deja etabli.
+ * No step closes the saved handle: that is what rebooted the machine
+ * on 15/09, and it is already established.
  */
 
 #include <mint/osbind.h>
@@ -37,7 +37,7 @@
 
 #define FICHIER "FORCETST.TMP"
 
-/* Tout passe par GEMDOS handle 1, comme le port. */
+/* Everything goes through GEMDOS handle 1, like the port. */
 static void dis(const char *s) {
     Fwrite(1, (long)strlen(s), s);
 }
@@ -70,8 +70,8 @@ int main(int argc, char **argv) {
     }
 
     if (etape == 4) {
-        /* unix/open.c de la MiNTlib rend directement la valeur de Fopen(),
-         * donc les deux numerotations doivent coincider. Confirmation. */
+        /* MiNTlib's unix/open.c returns the value of Fopen() directly,
+         * so the two numberings must match. Confirmation. */
         long h = Fcreate(FICHIER, 0);
         disl("Fcreate  rend", h);
         if (h >= 0) {
@@ -90,7 +90,7 @@ int main(int argc, char **argv) {
         return 0;
     }
 
-    /* Etapes 1 a 3 : la sequence proprement dite. */
+    /* Steps 1 to 3: the sequence itself. */
     dis("etape A : Fcreate du fichier de destination\r\n");
     long cible = Fcreate(FICHIER, 0);
     disl("  poignee cible", cible);
@@ -121,8 +121,8 @@ int main(int argc, char **argv) {
         return 0;
     }
 
-    /* A partir d'ici l'affichage part dans le fichier : plus rien a l'ecran
-     * tant qu'on n'a pas remis la poignee 1 en place. C'est normal. */
+    /* From here on output goes to the file: nothing more on screen
+     * until handle 1 has been put back. This is expected. */
     dis("etape C : Fforce(1, cible) -- l'ecran se tait maintenant\r\n");
     long r1 = Fforce(1, (int)cible);
 
@@ -135,7 +135,7 @@ int main(int argc, char **argv) {
     dis("etape D : Fforce(1, sauve) -- retour a l'ecran\r\n");
     long r3 = Fforce(1, (int)sauve);
 
-    /* Si on lit ceci, tout est passe. */
+    /* If we read this, everything went through. */
     dis("\r\nrevenu a l'ecran.\r\n");
     disl("  Fforce(1, cible) a rendu", r1);
     if (etape == 3) {

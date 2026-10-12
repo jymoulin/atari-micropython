@@ -1,6 +1,6 @@
-# Test de fumee du port Atari. A lancer depuis MPY.TTP avec SMOKE.PY comme
-# ligne de commande. Chaque bloc affiche ATTENDU: puis la valeur obtenue,
-# pour que la verification se fasse a l'oeil sans harnais.
+# Smoke test of the Atari port. Run from MPY.TTP with SMOKE.PY as the
+# command line. Each block prints ATTENDU: then the value obtained, so the
+# check can be done by eye without a harness.
 
 def chk(label, got, want):
     ok = "ok " if got == want else "NON"

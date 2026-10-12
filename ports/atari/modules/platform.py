@@ -43,19 +43,19 @@ def video():
 
 
 def _magic_version():
-    """(version, etat, date) de MagiC, ou None.
+    """(version, state, date) of MagiC, or None.
 
-    Le cookie MagX pointe sur une structure dont le 3e mot long est
-    l'adresse des variables de l'AES (AESVARS, voir ostruct.h dans les
-    sources de MagiC). On y lit, apres avoir verifie le magic $87654321 :
-    +16 la date (JJMMAAAA en BCD : D_BCD_DDMMYYYY dans aesmain.s, qui fait
-    foi contre le commentaire "mmddyyyy" de ostruct.h), +48 la version
+    The MagX cookie points to a structure whose 3rd long word is
+    the address of the AES variables (AESVARS, see ostruct.h in the
+    MagiC sources). After checking the magic $87654321, we read there:
+    +16 the date (DDMMYYYY in BCD: D_BCD_DDMMYYYY in aesmain.s, which is
+    authoritative over the "mmddyyyy" comment in ostruct.h), +48 the version
     ($0620 = 6.20), +50
-    l'etat (0 alpha, 1 beta, 2 gamma, 3 finale). aesvars vaut 0 tant que
-    l'AES n'a pas demarre, par exemple depuis le dossier AUTO.
+    the state (0 alpha, 1 beta, 2 gamma, 3 final). aesvars is 0 as long as
+    the AES has not started, for instance from the AUTO folder.
 
-    La version de l'en-tete systeme (uname().release) ne convient PAS :
-    MagiC y imite un TOS, et affichait "2.00" sur le STE.
+    The version in the system header (uname().release) is NOT suitable:
+    MagiC imitates a TOS there, and showed "2.00" on the STE.
     """
     import machine
     p = _cookie("MagX")
@@ -105,7 +105,7 @@ def release():
         txt = "%x.%02x" % (v >> 8, v & 0xFF)
         if etat < 3:
             txt += " " + ("alpha", "beta", "gamma")[etat]
-        # date JJMMAAAA en BCD : 0x17031999 -> 17/03/1999
+        # date DDMMYYYY in BCD: 0x17031999 -> 17/03/1999
         return "%s (%02x/%02x/%04x)" % (
             txt, date >> 24, (date >> 16) & 0xFF, date & 0xFFFF)
     if sys_name == "FreeMiNT":

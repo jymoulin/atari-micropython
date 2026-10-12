@@ -1,31 +1,31 @@
-# Tous les tests d'un coup, pour comparer les configurations (TOS, EmuTOS,
+# All tests in one go, to compare configurations (TOS, EmuTOS,
 # MagiC, 68000 / 68020 / 68030, ST / STE / Falcon...).
 #
-#   MPY20.TTP ALLTEST.PY                tests automatiques, sans risque
-#   MPY20.TTP ALLTEST.PY i2c disk dma   en plus ceux qui demandent du materiel
-#   MPYRUN.PRG puis ALLGEM.PY           le meme, plus GEMTEST, WINTEST et
-#                                       MENUTEST (il faut le mode GEM)
-#   MPY20.TTP ALLTEST.PY SMOKE VIPTEST    seulement ceux-la
+#   MPY20.TTP ALLTEST.PY                automatic tests, no risk
+#   MPY20.TTP ALLTEST.PY i2c disk dma   plus those that need hardware
+#   MPYRUN.PRG then ALLGEM.PY           the same, plus GEMTEST, WINTEST and
+#                                       MENUTEST (GEM mode required)
+#   MPY20.TTP ALLTEST.PY SMOKE VIPTEST    only those
 #
-# Options :
-#   gem    GEMTEST, WINTEST, MENUTEST (interactifs : suivre leurs consignes)
-#   i2c    I2CTEST, RTCTEST : bus I2C de la TwiSTer. Ailleurs (Falcon, ST
-#          d'origine) leurs registres n'existent pas : bombes assurees.
-#   disk   DISKTEST : lecture BIOS du lecteur C:
-#   dma    DMATEST : seulement depuis un vrai disque IDE
-#   auto   sous Hatari : les tests GEM simulent les gestes de l'utilisateur,
-#          et HWTEST n'attend pas de touche en monochrome
-#   net    NETTEST va aussi sur le reseau (DNS, HTTP vers example.com)
-#   nobench  sans BENCH a la fin
+# Options:
+#   gem    GEMTEST, WINTEST, MENUTEST (interactive: follow their instructions)
+#   i2c    I2CTEST, RTCTEST: TwiSTer I2C bus. Elsewhere (Falcon, stock ST)
+#          their registers do not exist: bombs guaranteed.
+#   disk   DISKTEST: BIOS read of drive C:
+#   dma    DMATEST: only from a real IDE disk
+#   auto   under Hatari: the GEM tests simulate the user's actions,
+#          and HWTEST does not wait for a key in monochrome
+#   net    NETTEST also goes onto the network (DNS, HTTP to example.com)
+#   nobench  no BENCH at the end
 #
-# Sans option, les tests qui dependent du materiel se choisissent seuls :
-# SNDTEST si le cookie _SND annonce le son DMA, NATTEST si NATMOD.MPY est
-# la, NETTEST (boucle locale 127.0.0.1) si STinG est charge. Chaque test
-# s'execute dans ce meme interpreteur, dans son propre espace de noms ; sa sortie s'affiche normalement, et ses lignes "ok",
-# "NON", "ECHEC" et "BILAN" sont comptees au passage.
+# Without options, hardware-dependent tests select themselves:
+# SNDTEST if the _SND cookie announces DMA sound, NATTEST if NATMOD.MPY is
+# present, NETTEST (127.0.0.1 loopback) if STinG is loaded. Each test
+# runs in this same interpreter, in its own namespace; its output is shown normally, and its "ok",
+# "NON", "ECHEC" and "BILAN" lines are counted along the way.
 #
-# A la fin : un tableau, et une ligne ajoutee a ALLTEST.SUM, qui garde
-# ainsi une ligne par configuration essayee.
+# At the end: a table, and a line appended to ALLTEST.SUM, which thus
+# keeps one line per configuration tried.
 
 import sys
 import gc
@@ -56,7 +56,7 @@ def cookie(nom, defaut=0):
     return defaut if v is None else v
 
 
-# (nom, arguments, condition, raison si saute)
+# (name, arguments, condition, reason if skipped)
 son_dma = bool(cookie("_SND") & 2)
 try:
     import socket
@@ -92,9 +92,9 @@ class Compteur:
     def __init__(self):
         self.ok = 0
         self.ko = 0
-        self.bilan = None       # (reussites, echecs) si le test l'a dit
+        self.bilan = None       # (passes, failures) if the test reported it
         self.fin = False
-        self.lignes = []        # pour BENCH : ses mesures
+        self.lignes = []        # for BENCH: its measurements
 
     def ligne(self, s):
         t = s.strip()
@@ -118,7 +118,7 @@ class Compteur:
             self.ko += 1
         if (t.startswith("boucle") or t.startswith("ecriture")) and "=" in t:
             # "boucle vide : 20000 tours en 4535 ms = 226 us/tour"
-            # devient "boucle vide 226 us/tour"
+            # becomes "boucle vide 226 us/tour"
             self.lignes.append("%s %s" % (" ".join(t.split(":")[0].split()),
                                           t.split("=")[-1].strip()))
 
@@ -250,7 +250,7 @@ _print("BILAN GLOBAL : %d tests ok, %d en echec, %d sautes%s" %
        (n_ok, n_ko, n_saute, " (interrompu)" if interrompu else ""))
 _print("tas libre a la fin : %d octets" % gc.mem_free())
 
-# Une ligne par configuration, cumulee d'un lancement a l'autre.
+# One line per configuration, accumulated from one run to the next.
 try:
     t = time.localtime()
     morceaux = []

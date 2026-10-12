@@ -1,12 +1,12 @@
-# Le module socket, au-dessus de STinG.
+# The socket module, on top of STinG.
 #
-#   MPY20.TTP NETTEST.PY          boucle locale 127.0.0.1 : sans reseau
-#   MPY20.TTP NETTEST.PY net      en plus DNS et HTTP vers l'exterieur
-#   MPY20.TTP NETTEST.PY net example.com    un autre serveur HTTP
+#   MPY20.TTP NETTEST.PY          loopback 127.0.0.1: no network
+#   MPY20.TTP NETTEST.PY net      plus DNS and HTTP to the outside
+#   MPY20.TTP NETTEST.PY net example.com    another HTTP server
 #
-# Sans STinG en memoire : le test le dit et s'arrete (rien a verifier).
-# Serveur et client sont dans ce meme programme : STinG fait tourner ses
-# connexions de lui-meme (interruptions), on alterne simplement les appels.
+# Without STinG in memory: the test says so and stops (nothing to check).
+# Server and client are in this same program: STinG runs its connections
+# by itself (interrupts), we simply alternate the calls.
 
 import sys
 import socket
@@ -45,7 +45,7 @@ def section(titre):
 
 
 def erreur(f):
-    # le code (errno) ou le message de l'OSError levee par f(), None sinon
+    # the code (errno) or message of the OSError raised by f(), else None
     try:
         f()
     except OSError as e:
@@ -54,7 +54,7 @@ def erreur(f):
 
 
 def recoit(s, n):
-    # exactement n octets (ou moins si la connexion se ferme)
+    # exactly n bytes (or fewer if the connection closes)
     morceaux = []
     while n > 0:
         b = s.recv(n)
@@ -101,10 +101,10 @@ check("recv cote serveur", recoit(conn, 7), b"bonjour")
 conn.sendall(b"salut, client")
 check("recv cote client", recoit(cli, 13), b"salut, client")
 
-# un gros bloc : on alterne envoi non bloquant et lecture
+# a big block: alternate non-blocking send and read
 N = 60000
-data = (bytes(range(256)) * (N // 256 + 1))[:N]   # vite fait, meme sur 68000
-mv = memoryview(data)            # tranches sans copie : moins de GC
+data = (bytes(range(256)) * (N // 256 + 1))[:N]   # fast, even on a 68000
+mv = memoryview(data)            # zero-copy slices: less GC
 cli.setblocking(False)
 recu = []
 nrecu = envoye = 0
@@ -114,7 +114,7 @@ while nrecu < N:
         try:
             envoye += cli.send(mv[envoye:envoye + 8192])
         except OSError:
-            pass                       # tampon plein : on lit d'abord
+            pass                       # buffer full: read first
     conn.settimeout(2)
     b = conn.recv(4096)
     recu.append(b)
@@ -159,7 +159,7 @@ section("deuxieme client sur le meme port")
 srv.settimeout(3)
 cli2 = None
 for essai in range(20):
-    # le serveur se remet a l'ecoute quand le port est libre
+    # the server listens again once the port is free
     srv.setblocking(False)
     erreur(srv.accept)
     cli2 = socket.socket()

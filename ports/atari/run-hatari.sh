@@ -1,41 +1,41 @@
 #!/bin/sh
-# Lance MPY20.TTP sous Hatari, sortie console redirigee sur le terminal.
+# Runs MPY20.TTP under Hatari, console output redirected to the terminal.
 #
-#   ./run-hatari.sh            # TT : 68030 + 8 Mo de TT-RAM (= le plus proche
-#                              #      d'un STE + TwiSTer pour l'alt-RAM)
+#   ./run-hatari.sh            # TT: 68030 + 8 MB of TT-RAM (= the closest
+#                              #     to a STE + TwiSTer for alt-RAM)
 #   MACHINE=falcon ./run-hatari.sh
-#   MACHINE=ste CPULEVEL=2 ./run-hatari.sh   # STE force en 68020
-#   AUTO='C:\MPY20.TTP' ./run-hatari.sh        # demarre direct sur le REPL
-#   FLOPPY=1 ./run-hatari.sh                 # reactive les lecteurs A: et B:
-#   FPU=68882 ./run-hatari.sh                # machine avec FPU (binaire FPU=1)
+#   MACHINE=ste CPULEVEL=2 ./run-hatari.sh   # STE forced to 68020
+#   AUTO='C:\MPY20.TTP' ./run-hatari.sh        # boots straight into the REPL
+#   FLOPPY=1 ./run-hatari.sh                 # re-enables drives A: and B:
+#   FPU=68882 ./run-hatari.sh                # machine with FPU (FPU=1 binary)
 #
-# Par defaut la machine emulee n'a PAS de FPU (--fpu none), comme le STE a
-# TwiSTer et comme un Falcon030 de base : c'est ce que suppose le binaire
-# construit par un simple "make". Un vrai TT, lui, a toujours un 68882.
+# By default the emulated machine has NO FPU (--fpu none), like the STE with
+# TwiSTer and like a stock Falcon030: that is what the binary built by a
+# plain "make" assumes. A real TT, on the other hand, always has a 68882.
 #
-# Par defaut les deux lecteurs de disquette sont debranches (--drive-a/b off)
-# et TOS est patche pour sauter une partie de son initialisation
-# (--fast-boot) : sans disquette a chercher, le demarrage est nettement plus
-# court. On ne s'en sert pas, le programme vient du disque GEMDOS.
+# By default both floppy drives are unplugged (--drive-a/b off) and TOS is
+# patched to skip part of its initialisation (--fast-boot): with no floppy
+# to look for, startup is noticeably shorter. We do not use them, the
+# program comes from the GEMDOS drive.
 #
-# MEMSIZE (Mo de ST-RAM, 4 par defaut) compte : le binaire fait 2,6 Mo et le
-# tas 1 Mo, donc sans RAM alternative il faut au moins 4 Mo, ou -m 256.
+# MEMSIZE (MB of ST-RAM, 4 by default) matters: the binary is 2.6 MB and the
+# heap 1 MB, so without alternate RAM at least 4 MB is needed, or -m 256.
 #
-# CLAVIER
-# -------
-# Par defaut : EmuTOS en francais (AZERTY) + mapping "scancode", c'est a dire
-# que Hatari transmet la POSITION physique de la touche, pas le caractere que
-# macOS en tire. Le Mac est en AZERTY francais et l'Atari aussi : les touches
-# tombent donc au meme endroit, y compris les chiffres (avec Shift) et les
-# accents. C'est aussi ce qu'on aura sur le vrai STE.
-# Les crochets et accolades restent la ou l'Atari les met, c'est a dire sur
-# des combinaisons Alternate -- comme sur la vraie machine.
+# KEYBOARD
+# --------
+# Default: EmuTOS in French (AZERTY) + "scancode" mapping, that is Hatari
+# sends the physical POSITION of the key, not the character macOS derives
+# from it. The Mac is French AZERTY and so is the Atari: keys therefore land
+# in the same place, including digits (with Shift) and accented letters.
+# It is also what we will get on the real STE.
+# Brackets and braces stay where the Atari puts them, that is on
+# Alternate combinations -- as on the real machine.
 #
-#   COUNTRY=us KEYMAP=symbolic ./run-hatari.sh   # TOS anglais, mapping par
-#                                                # symbole (QWERTY)
-#   KEYMAP=<fichier> ./run-hatari.sh             # table de correspondance
-#                                                # perso, voir dans le paquet
-#                                                # Hatari doc/keymap-sample.txt
+#   COUNTRY=us KEYMAP=symbolic ./run-hatari.sh   # English TOS, mapping by
+#                                                # symbol (QWERTY)
+#   KEYMAP=<file> ./run-hatari.sh                # custom mapping table,
+#                                                # see in the Hatari package
+#                                                # doc/keymap-sample.txt
 
 HATARI=${HATARI:-$HOME/Downloads/hatari-2.6.1_macos/Hatari.app/Contents/MacOS/Hatari}
 TOS=${TOS:-$HOME/Downloads/hatari-2.6.1_macos/Hatari.app/Contents/Resources/tos.img}
@@ -54,12 +54,12 @@ set -e
 
 mkdir -p "$DRIVE"
 cp "$HERE/build/MPY20.TTP" "$DRIVE/"
-# Les scripts de test partent sur le disque GEMDOS avec le binaire.
+# Test scripts go onto the GEMDOS drive along with the binary.
 [ -d "$HERE/tests" ] && cp "$HERE"/tests/*.PY "$DRIVE/" 2>/dev/null
 
-# Le type de mapping clavier ne s'expose pas en ligne de commande, seulement
-# dans un fichier de configuration -- que l'on genere.
-#   0 = symbolique (par caractere)   1 = scancode (par position)   2 = charge
+# The keyboard mapping type is not exposed on the command line, only
+# in a configuration file -- which we generate.
+#   0 = symbolic (by character)   1 = scancode (by position)   2 = loaded
 CFG=$HERE/build/keyboard.cfg
 case "$KEYMAP" in
     symbolic) KEYTYPE=0; KEYFILE= ;;
@@ -73,8 +73,8 @@ nKeymapType = $KEYTYPE
 szMappingFileName = $KEYFILE
 CFGEOF
 
-# La disposition du clavier vient de la ROM (pas de NVRAM) sur ST/STE, et de
-# la NVRAM sur TT et Falcon.
+# The keyboard layout comes from the ROM (no NVRAM) on ST/STE, and from
+# the NVRAM on TT and Falcon.
 case "$MACHINE" in
     tt|falcon) LOCALE="--layout $COUNTRY --language $COUNTRY" ;;
     *)         LOCALE="--country $COUNTRY" ;;

@@ -323,9 +323,9 @@ int mp_hal_stdin_rx_chr(void) {
 // The TOS console does not turn LF into CR+LF, so a bare "\n" from print()
 // would step diagonally down the screen. We insert the CR ourselves, unless
 // the caller already emitted one.
-// -q : plus rien a l'ecran, seulement dans le journal. Indispensable pour une
-// application GEM : la console et les fenetres partagent l'ecran, et le
-// moindre print() barbouille le dessin.
+// -q: nothing on screen any more, only in the log. Essential for a GEM
+// application: the console and the windows share the screen, and the
+// slightest print() smears the drawing.
 int atari_quiet = 0;
 
 mp_uint_t mp_hal_stdout_tx_strn(const char *str, size_t len) {

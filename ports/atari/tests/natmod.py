@@ -1,4 +1,4 @@
-# Module compile par mpy-cross -march=m68k : code natif precompile.
+# Module compiled by mpy-cross -march=m68k: precompiled native code.
 import micropython
 
 

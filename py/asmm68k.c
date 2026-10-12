@@ -110,9 +110,9 @@ void asm_m68k_cmp_reg_reg_setcc(asm_m68k_t *as, uint rd, uint rs, uint cond, uin
     asm_m68k_op_reg_imm8(as, 0x7000, rr, 0);    // moveq.l #0,rr
     asm_m68k_op_regea(as, 0xb080, rd, rs);      // cmp.l rs,rd
     asm_m68k_op_cc(as, 0x50c0, cond, rr);       // scc rr
-    // scc met l'octet bas a 0xFF quand la condition est vraie ; les autres
-    // architectures rendent 1, et viper l'expose (int(a < b)). neg.b fait
-    // 0xFF -> 0x01 et laisse 0 a 0 ; le reste du registre est deja nul.
+    // scc sets the low byte to 0xFF when the condition is true; the other
+    // architectures return 1, and viper exposes it (int(a < b)). neg.b turns
+    // 0xFF -> 0x01 and leaves 0 at 0; the rest of the register is already zero.
     asm_m68k_op16(as, 0x4400 | rr);             // neg.b rr
 }
 
@@ -318,12 +318,12 @@ void asm_m68k_ld_reg_reg_ofst(asm_m68k_t *as, uint rd, uint rbase, uint word_off
 
 void asm_m68k_ld8_reg_reg(asm_m68k_t *as, uint rd, uint rbase) {
     DEBUG_printf("ASM_LOAD8_REG_REG(r%d<-[r%d])\n", rd, rbase);
-    // Chargements 8 et 16 bits NON SIGNES, comme sur les autres
-    // architectures (ptr8, ptr16, numeros de qstr) : mise a zero puis
-    // move.b/move.w. Le port X68000 etendait le signe (ext.w/ext.l), ce qui
-    // rendait -128..127 pour ptr8 (verifie par VIPERTEST). rd est toujours
-    // un registre de donnees ; rbase est copie dans a0 avant la mise a zero,
-    // au cas ou rd == rbase.
+    // UNSIGNED 8 and 16 bit loads, as on the other
+    // architectures (ptr8, ptr16, qstr numbers): clear then
+    // move.b/move.w. The X68000 port sign-extended (ext.w/ext.l), which
+    // returned -128..127 for ptr8 (checked by VIPERTEST). rd is always
+    // a data register; rbase is copied into a0 before the clear,
+    // in case rd == rbase.
     asm_m68k_op_move(as, 0x2000, ASM_M68K_REG_AT, rbase);   // movea.l rbase,a0
     asm_m68k_op_reg_imm8(as, 0x7000, rd, 0);                // moveq.l #0,rd
     asm_m68k_op_move(as, 0x1000, rd, ASM_M68K_AT_IND);      // move.b (a0),rd

@@ -1,10 +1,11 @@
-# Acces disque BIOS en LECTURE SEULE : Getbpb, Mediach, disk_read.
+# READ-ONLY BIOS disk access: Getbpb, Mediach, disk_read.
 #
-#   MPY.TTP DISKTEST.PY        lit le lecteur C:
-#   MPY.TTP DISKTEST.PY D      lit le lecteur D:
+#   MPY.TTP DISKTEST.PY        reads drive C:
+#   MPY.TTP DISKTEST.PY D      reads drive D:
 #
-# Aucune ecriture, nulle part : le port n'en offre pas. Eviter A: sans
-# disquette dedans : TOS afficherait son alerte "lecteur ne repond pas".
+# No writes, anywhere: the port does not offer any. Avoid A: with no
+# floppy in it: TOS would show its "lecteur ne repond pas" (drive not
+# responding) alert.
 
 import machine
 import sys
@@ -44,8 +45,8 @@ except OSError as e:
 try:
     bpb = machine.Getbpb(lecteur)
 except OSError as e:
-    # Le disque GEMDOS emule de Hatari n'a pas de peripherique BIOS derriere
-    # lui : c'est la reponse attendue sous l'emulateur.
+    # Hatari's emulated GEMDOS drive has no BIOS device behind it: this is
+    # the expected answer under the emulator.
     print("   Getbpb : OSError %s -- pas de peripherique BIOS" % e)
     print("   (normal pour le disque GEMDOS emule de Hatari)")
     bpb = None
@@ -64,7 +65,7 @@ if bpb is not None:
     s = machine.disk_read(lecteur, 0)
     verifie("longueur", len(s) == bpb["recsiz"], "%d octets" % len(s))
     print("   " + " ".join("%02x" % b for b in s[:16]))
-    # Le BPB du secteur de boot est en little-endian (heritage MS-DOS).
+    # The boot sector BPB is little-endian (MS-DOS heritage).
     bps = s[11] | (s[12] << 8)
     verifie("octets/secteur du boot = recsiz", bps == bpb["recsiz"], "%d" % bps)
     somme = 0
@@ -79,9 +80,9 @@ if bpb is not None:
     s = machine.disk_read(lecteur, 1, n)
     verifie("%d secteurs d'un coup" % n, len(s) == n * bpb["recsiz"])
 
-    # Dernier secteur de la partition. Au-dela de 32767, disk_read passe par
-    # la forme longue de Rwabs (numero de secteur sur 32 bits) : c'est le
-    # seul moyen de l'eprouver.
+    # Last sector of the partition. Beyond 32767, disk_read goes through
+    # the long form of Rwabs (32-bit sector number): it is the only way
+    # to exercise it.
     dernier = bpb["datrec"] + bpb["numcl"] * bpb["clsiz"] - 1
     s = machine.disk_read(lecteur, dernier)
     forme = "forme longue" if dernier > 32767 else "forme courte"

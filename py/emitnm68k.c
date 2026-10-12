@@ -9,16 +9,16 @@
 #define GENERIC_ASM_API (1)
 #include "py/asmm68k.h"
 
-// NLR : ce portage utilise setjmp, comme le port Atari (MICROPY_NLR_SETJMP),
-// et non le NLR natif du port X68000 (nlrm68k.c, non importe). Le code natif
-// appelle donc lui-meme setjmp (MP_F_SETJMP) sur le jmp_buf du nlr_buf_t.
+// NLR: this port uses setjmp, like the Atari port (MICROPY_NLR_SETJMP),
+// and not the native NLR of the X68000 port (nlrm68k.c, not imported). Native
+// code therefore calls setjmp itself (MP_F_SETJMP) on the nlr_buf_t's jmp_buf.
 #define N_NLR_SETJMP (1)
 
-// Mot du nlr_buf_t ou setjmp range REG_LOCAL_1 (d4). nlr_buf_t commence par
-// prev et ret_val (mots 0 et 1), puis le jmp_buf. Celui de la MiNTlib
-// (mintlib/setjmp.S) : adresse de retour au mot 0, puis
-// moveml d2-d7/a2-a7 a partir du mot 1 -- d4 est au mot 3.
-// D'ou 2 + 3. Le port X68000, avec son NLR natif, avait 6.
+// Word of the nlr_buf_t where setjmp stores REG_LOCAL_1 (d4). nlr_buf_t starts
+// with prev and ret_val (words 0 and 1), then the jmp_buf. MiNTlib's one
+// (mintlib/setjmp.S): return address at word 0, then
+// moveml d2-d7/a2-a7 from word 1 onwards -- d4 is at word 3.
+// Hence 2 + 3. The X68000 port, with its native NLR, had 6.
 #define NLR_BUF_IDX_LOCAL_1 (2 + 3) // d4
 
 // m68k needs a table to know how many args a given function has

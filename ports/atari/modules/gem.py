@@ -1,20 +1,20 @@
-# gem : dessiner avec le VDI et dialoguer avec l'AES, depuis Python.
+# gem: draw with the VDI and talk to the AES, from Python.
 #
 #   import gem
 #   with gem.Screen() as s:
 #       s.clear()
 #       s.color(fill=2)
 #       s.fill_rect(10, 10, 200, 100)
-#       s.text(20, 120, "Bonjour l'Atari")
-#   choix = gem.alert("Enregistrer ?", ("Oui", "Non"))
-#   nom = gem.fileselect("*.PY")
+#       s.text(20, 120, "Hello Atari")
+#   choice = gem.alert("Save?", ("Yes", "No"))
+#   name = gem.fileselect("*.PY")
 #
-# Le C (_gem) ne fournit que l'indispensable : vdi() et aes() generiques, et
-# les appels qui portent des chaines. Tout le reste est ici, par-dessus
-# _gem.vdi(), avec les numeros d'opcode du VDI en clair.
+# The C side (_gem) only provides the bare minimum: generic vdi() and aes(),
+# and the calls that carry strings. Everything else is here, on top of
+# _gem.vdi(), with the VDI opcode numbers spelled out.
 #
-# L'AES doit tourner : un programme lance depuis le bureau (ou un shell sous
-# le bureau) l'a, un programme du dossier AUTO non.
+# The AES must be running: a program launched from the desktop (or from a
+# shell under the desktop) has it, a program in the AUTO folder does not.
 
 import _gem
 from _gem import vdi, aes
@@ -37,7 +37,7 @@ SOLID = 1
 PATTERN = 2
 HATCH = 3
 
-# form_alert, icone
+# form_alert, icon
 NOICON = 0
 NOTE = 1
 QUESTION = 2
@@ -49,7 +49,7 @@ MU_BUTTON = 2
 MU_MESAG = 16
 MU_TIMER = 32
 
-# wind_create : elements du cadre
+# wind_create: frame elements
 NAME = 1
 CLOSER = 2
 FULLER = 4
@@ -57,7 +57,7 @@ MOVER = 8
 INFO = 16
 SIZER = 32
 
-# messages AES
+# AES messages
 WM_REDRAW = 20
 WM_TOPPED = 21
 WM_CLOSED = 22
@@ -76,7 +76,7 @@ WF_TOP = 10
 WF_FIRSTXYWH = 11
 WF_NEXTXYWH = 12
 
-# menus : types, drapeaux et etats d'objet AES, message de choix
+# menus: AES object types, flags and states, selection message
 G_BOX = 20
 G_IBOX = 25
 G_STRING = 28
@@ -106,10 +106,10 @@ def _app_leave():
 
 
 class Canvas:
-    """Les primitives de dessin, sur une station de travail VDI ouverte
-    (self.handle). Partagees par Screen et par les fenetres d'une App."""
+    """The drawing primitives, on an open VDI workstation
+    (self.handle). Shared by Screen and by the windows of an App."""
 
-    # --- attributs ---------------------------------------------------------
+    # --- attributes --------------------------------------------------------
 
     def color(self, line=None, fill=None, text=None):
         if line is not None:
@@ -127,10 +127,10 @@ class Canvas:
         vdi(24, self.handle, (style,))             # vsf_style
 
     def line_width(self, w):
-        vdi(16, self.handle, ptsin=(w, 0))         # vsl_width (impair)
+        vdi(16, self.handle, ptsin=(w, 0))         # vsl_width (odd)
 
     def rgb(self, index, r, g, b):
-        """Couleur de palette, composantes de 0 a 1000."""
+        """Palette colour, components from 0 to 1000."""
         vdi(14, self.handle, (index, r, g, b))     # vs_color
 
     def clip(self, x1=None, y1=None, x2=None, y2=None):
@@ -139,7 +139,7 @@ class Canvas:
         else:
             vdi(129, self.handle, (1,), (x1, y1, x2, y2))
 
-    # --- dessin ------------------------------------------------------------
+    # --- drawing -----------------------------------------------------------
 
     def clear(self):
         vdi(3, self.handle)                        # v_clrwk
@@ -148,7 +148,7 @@ class Canvas:
         vdi(6, self.handle, ptsin=(x1, y1, x2, y2))
 
     def polyline(self, points):
-        """points : sequence plate x0, y0, x1, y1, ..."""
+        """points: flat sequence x0, y0, x1, y1, ..."""
         vdi(6, self.handle, ptsin=points)
 
     def rect(self, x1, y1, x2, y2):
@@ -163,7 +163,7 @@ class Canvas:
     def circle(self, x, y, r, fill=False):
         if fill:
             vdi(11, self.handle, ptsin=(x, y, 0, 0, r, 0), subop=4)
-        else:                                      # v_arc de 0 a 360 degres
+        else:                                      # v_arc from 0 to 360 degrees
             vdi(11, self.handle, (0, 3600), (x, y, 0, 0, 0, 0, r, 0), subop=2)
 
     def ellipse(self, x, y, rx, ry, fill=False):
@@ -176,18 +176,18 @@ class Canvas:
         _gem.v_gtext(self.handle, x, y, s)
 
     def pixel(self, x, y):
-        """Index de couleur du pixel (x, y)."""
+        """Colour index of pixel (x, y)."""
         return vdi(105, self.handle, ptsin=(x, y))[0][1]   # v_get_pixel
 
 
 
 class Screen(Canvas):
-    """L'ecran, par une station de travail virtuelle du VDI.
+    """The screen, through a VDI virtual workstation.
 
-    lock=True prend wind_update(BEG_UPDATE) : sous un systeme multitache,
-    personne d'autre ne dessine pendant ce temps. hide_mouse=True cache la
-    souris le temps du dessin, sans quoi elle laisse des traces.
-    Coordonnees en pixels, (0, 0) en haut a gauche.
+    lock=True takes wind_update(BEG_UPDATE): under a multitasking system,
+    nobody else draws in the meantime. hide_mouse=True hides the
+    mouse while drawing, otherwise it leaves trails.
+    Coordinates in pixels, (0, 0) at top left.
     """
 
     def __init__(self, lock=True, hide_mouse=True):
@@ -218,8 +218,8 @@ class Screen(Canvas):
             _gem.wind_update(1)
         if self._hide:
             vdi(123, self.handle)                  # v_hide_c
-        vdi(39, self.handle, (0, 5))               # texte : gauche, haut
-        vdi(23, self.handle, (SOLID,))             # remplissage plein
+        vdi(39, self.handle, (0, 5))               # text: left, top
+        vdi(23, self.handle, (SOLID,))             # solid fill
         return self
 
     def close(self):
@@ -234,9 +234,9 @@ class Screen(Canvas):
         _app_leave()
 
 def alert(message, buttons=("OK",), default=1, icon=NOICON):
-    """Boite d'alerte GEM. Rend le numero du bouton choisi, a partir de 1.
+    """GEM alert box. Returns the number of the chosen button, from 1.
 
-    Au plus 5 lignes de 30 caracteres (coupees ici si besoin) et 3 boutons.
+    At most 5 lines of 30 characters (wrapped here if needed) and 3 buttons.
     """
     for c in "[]|":
         if c in message or any(c in b for b in buttons):
@@ -264,7 +264,7 @@ def alert(message, buttons=("OK",), default=1, icon=NOICON):
 
 
 def fileselect(pattern="*.*", directory=None, name="", title="Choisir un fichier"):
-    """Selecteur de fichiers GEM. Rend le chemin complet, ou None si annule."""
+    """GEM file selector. Returns the full path, or None if cancelled."""
     if directory is None:
         import uos
         directory = uos.getcwd()
@@ -282,17 +282,17 @@ def fileselect(pattern="*.*", directory=None, name="", title="Choisir un fichier
 
 
 def wait_key():
-    """Attend une touche. Rend scan code << 8 | caractere.
+    """Wait for a key. Returns scan code << 8 | character.
 
-    Par GEMDOS (Crawcin), comme input() : c'est un programme TOS. Une
-    touche frappee avant l'appel a deja ete mise de cote par le guet du
-    Ctrl-C ; elle est rendue en premier, sans scan code. Ctrl-C leve
+    Through GEMDOS (Crawcin), like input(): this is a TOS program. A
+    key typed before the call has already been set aside by the Ctrl-C
+    watch; it is returned first, without a scan code. Ctrl-C raises
     KeyboardInterrupt.
     """
     return _gem.wait_key()
 
 
-# --- fenetres ---------------------------------------------------------------
+# --- windows ----------------------------------------------------------------
 
 
 def _wind_get(h, field):
@@ -304,7 +304,7 @@ def _wind_set(h, field, a=0, b=0, c=0, d=0):
 
 
 def _inter(r1, r2):
-    """Intersection de deux rectangles (x, y, w, h), ou None."""
+    """Intersection of two rectangles (x, y, w, h), or None."""
     x = max(r1[0], r2[0])
     y = max(r1[1], r2[1])
     x2 = min(r1[0] + r1[2], r2[0] + r2[2])
@@ -315,12 +315,12 @@ def _inter(r1, r2):
 
 
 class Window:
-    """Une fenetre GEM. Creee par App.window(), pas directement.
+    """A GEM window. Created by App.window(), not directly.
 
-    Le contenu se dessine dans on_draw(canvas, x, y, w, h), rappele pour
-    chaque rectangle a redessiner, avec le clip deja pose : dessiner toute la
-    zone de travail sans se soucier du reste. (x, y, w, h) est la zone de
-    travail entiere, en coordonnees ecran.
+    The content is drawn in on_draw(canvas, x, y, w, h), called back for
+    each rectangle to redraw, with the clip already set: draw the whole
+    work area without worrying about the rest. (x, y, w, h) is the whole
+    work area, in screen coordinates.
     """
 
     def __init__(self, app, title, kind, x, y, w, h):
@@ -328,9 +328,9 @@ class Window:
         self.kind = kind
         self.on_draw = None
         self.on_close = None
-        # wind_create recoit la taille MAXIMALE -- celle du plein ecran
-        # (WM_FULLED) --, donc le bureau entier. La taille voulue n'est
-        # donnee qu'a l'ouverture.
+        # wind_create receives the MAXIMUM size -- the full-screen one
+        # (WM_FULLED) --, hence the whole desktop. The wanted size is
+        # only given at opening.
         self.handle = aes(100, (kind,) + tuple(app.desk))[0][0]   # wind_create
         if self.handle < 0:
             raise OSError("plus de fenetre disponible")
@@ -366,12 +366,12 @@ class Window:
 
     @property
     def work(self):
-        """Zone de travail (x, y, w, h), en coordonnees ecran."""
+        """Work area (x, y, w, h), in screen coordinates."""
         return _wind_get(self.handle, WF_WORKXYWH)
 
     @property
     def rect(self):
-        """Fenetre entiere, cadre compris."""
+        """Whole window, frame included."""
         return _wind_get(self.handle, WF_CURRXYWH)
 
     def move(self, x, y, w, h):
@@ -382,9 +382,9 @@ class Window:
         _wind_set(self.handle, WF_TOP)
 
     def redraw(self, area=None):
-        """Redessine area (x, y, w, h), toute la zone de travail par defaut.
-        Parcourt la liste des rectangles visibles que tient l'AES : une
-        fenetre en partie recouverte n'est redessinee que la ou elle se voit.
+        """Redraw area (x, y, w, h), the whole work area by default.
+        Walks the list of visible rectangles kept by the AES: a partly
+        covered window is only redrawn where it can be seen.
         """
         if not self.is_open or self.on_draw is None:
             return
@@ -410,27 +410,27 @@ class Window:
             _gem.wind_update(0)
 
     def invalidate(self):
-        """Demande un redessin par l'AES (message WM_REDRAW a soi-meme)."""
+        """Request a redraw through the AES (WM_REDRAW message to itself)."""
         x, y, w, h = self.work
         _gem.appl_write(_gem.ap_id(),
                         (WM_REDRAW, _gem.ap_id(), 0, self.handle, x, y, w, h))
 
 
 class App:
-    """Une application GEM : fenetres et boucle d'evenements.
+    """A GEM application: windows and event loop.
 
         with gem.App() as app:
-            w = app.window("Bonjour", 40, 40, 300, 200)
+            w = app.window("Hello", 40, 40, 300, 200)
             w.on_draw = lambda c, x, y, w_, h: (c.color(fill=0),
                                                 c.fill_rect(x, y, x + w_ - 1, y + h - 1))
             w.open()
             app.run()
 
-    run() rend la main quand la derniere fenetre est fermee, quand stop() est
-    appele, ou au bout de timeout ms. Les rappels :
-      on_key(code)            touche (scan << 8 | caractere)
-      on_click(x, y, boutons, nclics)
-      on_timer()              toutes les tick ms (si defini)
+    run() returns when the last window is closed, when stop() is
+    called, or after timeout ms. The callbacks:
+      on_key(code)            key (scan << 8 | character)
+      on_click(x, y, buttons, nclicks)
+      on_timer()              every tick ms (if defined)
     """
 
     def __init__(self):
@@ -452,21 +452,21 @@ class App:
         self.width = wo[0] + 1
         self.height = wo[1] + 1
         self.colors = wo[13]
-        vdi(39, self.canvas.handle, (0, 5))     # texte : gauche, haut
+        vdi(39, self.canvas.handle, (0, 5))     # text: left, top
         vdi(23, self.canvas.handle, (SOLID,))
         _gem.graf_mouse(ARROW)
         self._refresh_desk()
-        # Messages recus, si on veut les journaliser : app.trace = []
+        # Received messages, to log them: app.trace = []
         self.trace = None
 
     def _refresh_desk(self):
-        """Fait redessiner tout le bureau par l'AES, souris cachee.
+        """Have the AES redraw the whole desktop, with the mouse hidden.
 
-        Le pointeur garde une copie de ce qu'il recouvre. Si l'ecran a ete
-        repeint sans qu'il soit cache -- au lancement, quand le bureau efface
-        l'ecran --, il restitue en bougeant des carres de l'ancien ecran.
-        Le cacher, faire redessiner (form_dial FMD_FINISH sur le bureau
-        entier), puis le reafficher repart d'un ecran propre.
+        The pointer keeps a copy of what it covers. If the screen was
+        repainted while it was not hidden -- at launch, when the desktop clears
+        the screen --, it restores squares of the old screen as it moves.
+        Hiding it, having the screen redrawn (form_dial FMD_FINISH on the whole
+        desktop), then showing it again starts over from a clean screen.
         """
         x, y, w, h = self.desk
         _gem.graf_mouse(M_OFF)
@@ -495,7 +495,7 @@ class App:
 
     @property
     def desk(self):
-        """Zone utile du bureau (x, y, w, h), sous la barre de menus."""
+        """Usable desktop area (x, y, w, h), below the menu bar."""
         return _wind_get(0, WF_WORKXYWH)
 
     def window(self, title, x=None, y=None, w=None, h=None,
@@ -514,7 +514,7 @@ class App:
         return win
 
     def menu(self, menus, about=None, title=None):
-        """Installe une barre de menus. Voir la classe Menu."""
+        """Install a menu bar. See the Menu class."""
         if self._menu is not None:
             self._menu.hide()
         self._menu = Menu(self, menus, about, title)
@@ -531,9 +531,9 @@ class App:
         flags = MU_MESAG | MU_KEYBD | MU_BUTTON | MU_TIMER
         while self._running and (self._menu is not None
                                  or any(w.is_open for w in self._windows.values())):
-            # Le minuteur rend la main a Python regulierement : sans lui,
-            # l'interprete resterait bloque dans l'AES et le hook Ctrl-C ne
-            # tournerait plus.
+            # The timer hands control back to Python regularly: without it,
+            # the interpreter would stay blocked in the AES and the Ctrl-C hook
+            # would no longer run.
             ev, mx, my, mb, ks, key, nc, msg = _gem.evnt_multi(flags, self.tick)
             if ev & MU_MESAG:
                 self._message(msg)
@@ -588,20 +588,20 @@ class App:
 
 
 class Menu:
-    """Barre de menus GEM, creee par App.menu().
+    """GEM menu bar, created by App.menu().
 
-        app.menu([("Fichier", [("Ouvrir...", ouvrir), None, ("Quitter", app.stop)]),
-                  ("Options", [("Son", bascule_son)])],
-                 about=("A propos de MonAppli...", a_propos))
+        app.menu([("File", [("Open...", do_open), None, ("Quit", app.stop)]),
+                  ("Options", [("Sound", toggle_sound)])],
+                 about=("About MyApp...", about_box))
 
-    None dans une liste d'entrees trace un separateur. Le premier titre est
-    celui du menu bureau (le nom de l'application, title=, par defaut
-    "Python") : il porte "A propos" et les six places que l'AES reserve aux
-    accessoires -- elles doivent exister, l'AES y ecrit.
+    None in a list of entries draws a separator. The first title is
+    the desk menu's (the application name, title=, "Python" by
+    default): it carries "About" and the six slots the AES reserves for
+    accessories -- they must exist, the AES writes into them.
 
-    L'arbre d'objets est construit ici, dans un bytearray : l'AES le lit et
-    y ecrit (etats des entrees) tant que le menu est affiche. Le GC ne
-    deplace jamais un objet, son adresse reste donc valable ; Menu garde la
+    The object tree is built here, in a bytearray: the AES reads it and
+    writes into it (entry states) as long as the menu is shown. The GC never
+    moves an object, so its address stays valid; Menu keeps the
     reference.
     """
 
@@ -609,17 +609,17 @@ class Menu:
         import struct
         cw, ch = app.char_w, app.char_h
         W, H = app.width, app.height
-        self._cb = {}           # objet entree -> rappel
-        self._labels = {}       # libelle -> objet entree
-        self._titles = {}       # libelle de titre -> objet titre
-        self._title_of = {}     # objet entree -> objet titre
+        self._cb = {}           # entry object -> callback
+        self._labels = {}       # label -> entry object
+        self._titles = {}       # title label -> title object
+        self._title_of = {}     # entry object -> title object
 
         desk = [(about[0] if about else "A propos...", about[1] if about else None), None]
         desk += [("Accessoire %d" % i, None) for i in range(1, 7)]
         menus = [(title or "Python", desk)] + list(menus)
 
         objs = []   # [next, head, tail, type, flags, state, spec, x, y, w, h]
-        texts = []  # (objet, bytes) : chaines a placer apres les objets
+        texts = []  # (object, bytes): strings to place after the objects
 
         def new(typ, x, y, w, h, spec=0, text=None, state=0):
             objs.append([-1, -1, -1, typ, 0, state, spec, x, y, w, h])
@@ -653,7 +653,7 @@ class Menu:
         for k, (name, items) in enumerate(menus):
             larg = max([len(it[0]) for it in items if it] + [8]) + 4
             if k == 0:
-                larg = max(larg, 22)    # noms d'accessoires
+                larg = max(larg, 22)    # accessory names
             x = objs[active][7] + objs[titles[k]][7]
             if x + larg * cw > W:
                 x = W - larg * cw - 1
@@ -680,7 +680,7 @@ class Menu:
         link(screen, drops)
         objs[-1][4] |= LASTOB
 
-        # Un seul bloc : les objets (24 octets chacun), puis les chaines.
+        # A single block: the objects (24 bytes each), then the strings.
         n = len(objs)
         taille = n * 24 + sum(len(b) for _, b in texts)
         self._buf = bytearray(taille)
@@ -718,7 +718,7 @@ class Menu:
         aes(32, (self._obj(label), 1 if on else 0), (self.addr,))   # menu_ienable
 
     def state(self, label_or_obj):
-        """Etat AES de l'objet (SELECTED, CHECKED, DISABLED...)."""
+        """AES state of the object (SELECTED, CHECKED, DISABLED...)."""
         o = label_or_obj if isinstance(label_or_obj, int) else (
             self._titles.get(label_or_obj) or self._obj(label_or_obj))
         return (self._buf[o * 24 + 10] << 8) | self._buf[o * 24 + 11]

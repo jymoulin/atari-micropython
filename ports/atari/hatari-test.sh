@@ -1,39 +1,39 @@
 #!/bin/sh
-# Execute un script de test sous Hatari, sans intervention, et affiche son
-# journal. Hatari s'arrete seul apres VBLS images.
+# Runs a test script under Hatari, unattended, and prints its log.
+# Hatari stops by itself after VBLS frames.
 #
 #   ./hatari-test.sh SMOKE.PY
 #   ./hatari-test.sh OSTEST.PY force
 #   MACHINE=ste CPULEVEL=2 ./hatari-test.sh SNDTEST.PY
 #   MONITOR=mono ./hatari-test.sh GEMTEST.PY auto     # 640 x 400
-#   EXTRA=/tmp/DIAG.PY ./hatari-test.sh DIAG.PY          # script hors tests/
+#   EXTRA=/tmp/DIAG.PY ./hatari-test.sh DIAG.PY          # script outside tests/
 #   AUTOPRG='C:\\MPYRUN.PRG' HCMDS='14:hatari-event keypress 28' ./hatari-test.sh X
-#       AUTOPRG : demarrer autre chose que RUNTEST.PRG
-#       HCMDS   : touches envoyees depuis le Mac a des instants donnes
+#       AUTOPRG : start something other than RUNTEST.PRG
+#       HCMDS   : keys sent from the Mac at given times
 #   ACSI=disque.img ./hatari-test.sh DISKTEST.PY C
-#   BIN=/tmp/autre/MPY.TTP ./hatari-test.sh BENCH.PY   # autre binaire
-#   STING=1 ./hatari-test.sh NETTEST.PY    # avec STinG (KIT de reference,
-#       ~/Downloads/ToTest/sting/KIT, ou STING=chemin du KIT) : AUTO\STING.PRG
-#       et C:\STING ; sans pilote reseau, seule la boucle 127.0.0.1 sert
+#   BIN=/tmp/autre/MPY.TTP ./hatari-test.sh BENCH.PY   # another binary
+#   STING=1 ./hatari-test.sh NETTEST.PY    # with STinG (reference KIT,
+#       ~/Downloads/ToTest/sting/KIT, or STING=path of the KIT): AUTO\STING.PRG
+#       and C:\STING; without a network driver, only the 127.0.0.1 loopback works
 #
-# Commandes vers Hatari depuis le test : le script ecrit une commande de
-# controle Hatari dans C:\HATARI.CMD (par ex. "hatari-event keypress 28"
-# pour Return, "hatari-shortcut screenshot"). Une boucle, ici, l'envoie par
-# --cmd-fifo puis efface le fichier ; le test attend cet effacement avant de
-# continuer. Captures d'ecran dans /tmp/mpy-shots.
+# Commands to Hatari from the test: the script writes a Hatari control
+# command to C:\HATARI.CMD (e.g. "hatari-event keypress 28" for Return,
+# "hatari-shortcut screenshot"). A loop, here, sends it through --cmd-fifo
+# then deletes the file; the test waits for that deletion before going on.
+# Screenshots go to /tmp/mpy-shots.
 #
-# ACSI : monte une image de disque en ACSI 0. EmuTOS (le tos.img fourni avec
-# Hatari) la lit avec ses propres pilotes et lui donne C: ; le disque GEMDOS
-# emule passe alors en D:. C'est le seul moyen d'avoir un vrai peripherique
-# BIOS sous l'emulateur, donc d'eprouver Getbpb/Rwabs.
+# ACSI: mounts a disk image as ACSI 0. EmuTOS (the tos.img shipped with
+# Hatari) reads it with its own drivers and gives it C:; the emulated GEMDOS
+# drive then moves to D:. It is the only way to get a real BIOS device
+# under the emulator, hence to exercise Getbpb/Rwabs.
 #
-# Mecanique : --auto ne passe pas d'arguments, donc RUNTEST.PRG (tools/
-# runtest.c) lit la ligne de commande dans RUNTEST.ARG et lance MPY.TTP avec
-# "-l RESULT.TXT". Le journal atterrit directement dans le dossier du Mac qui
-# sert de disque GEMDOS : on le relit ici. Code de retour de MPY.TTP dans
+# Mechanics: --auto passes no arguments, so RUNTEST.PRG (tools/runtest.c)
+# reads the command line from RUNTEST.ARG and starts MPY.TTP with
+# "-l RESULT.TXT". The log lands directly in the Mac folder that serves as
+# the GEMDOS drive: we read it back here. MPY.TTP exit code in
 # RUNTEST.RET.
 #
-# Prerequis : make, puis make -f Makefile.tools (pour RUNTEST.PRG).
+# Prerequisites: make, then make -f Makefile.tools (for RUNTEST.PRG).
 
 HATARI=${HATARI:-$HOME/Downloads/hatari-2.6.1_macos/Hatari.app/Contents/MacOS/Hatari}
 TOS=${TOS:-$HOME/Downloads/hatari-2.6.1_macos/Hatari.app/Contents/Resources/tos.img}
@@ -47,10 +47,10 @@ else
     DISK_OPTS=""
     AUTO='C:\RUNTEST.PRG'
 fi
-AUTO=${AUTOPRG:-$AUTO}          # AUTOPRG : demarrer autre chose (MPYRUN.PRG)
+AUTO=${AUTOPRG:-$AUTO}          # AUTOPRG: start something else (MPYRUN.PRG)
 HERE=$(cd "$(dirname "$0")" && pwd)
 BIN=${BIN:-$HERE/build/MPY20.TTP}
-# Tout le temporaire dans /tmp, hors de ~/Documents (et d'iCloud).
+# All temporary files in /tmp, outside ~/Documents (and iCloud).
 D=/tmp/mpy-hdtest
 OUT=/tmp/mpy-hatari.out
 FIFO=/tmp/mpy-hatari.fifo
@@ -65,7 +65,7 @@ cp "$BIN" "$D/MPY.TTP"
 cp "$HERE/build/RUNTEST.PRG" "$D/"
 [ -f "$HERE/build/MPYRUN.PRG" ] && cp "$HERE/build/MPYRUN.PRG" "$D/"
 cp "$HERE"/tests/*.PY "$D/"
-# EXTRA : fichiers en plus (scripts de diagnostic ecrits dans /tmp, par ex.)
+# EXTRA: additional files (diagnostic scripts written in /tmp, for example)
 for f in $EXTRA; do cp "$f" "$D/"; done
 if [ -n "$STING" ]; then
     KIT=$STING; [ "$KIT" = 1 ] && KIT=$HOME/Downloads/ToTest/sting/KIT
@@ -79,9 +79,9 @@ printf -- '%s-l RESULT.TXT %s\r\n' "${QUIET:+-q }" "$*" > "$D/RUNTEST.ARG"
 
 rm -f "$FIFO"; mkdir -p "$SHOTS"
 
-# Relais HATARI.CMD -> fifo de commande de Hatari, tant que Hatari tourne.
-# Un "cat" par commande : Hatari lit son fifo en non bloquant, et un
-# ecrivain garde ouvert en permanence le noie sous les EAGAIN.
+# Relay HATARI.CMD -> Hatari command fifo, as long as Hatari runs.
+# One "cat" per command: Hatari reads its fifo non-blocking, and a
+# writer kept open permanently floods it with EAGAIN.
 (
     while [ ! -p "$FIFO" ]; do sleep 0.2; done
     while [ -p "$FIFO" ]; do
@@ -95,10 +95,10 @@ rm -f "$FIFO"; mkdir -p "$SHOTS"
 ) 2>/dev/null &
 RELAY=$!
 
-# HCMDS : commandes envoyees depuis le Mac a des instants donnes, sous la
-# forme "delai:commande;delai:commande" (delais en secondes REELLES, cumules).
-# Pour piloter ce qui tourne avant tout script Python -- le lanceur MPYRUN,
-# par exemple -- quand HATARI.CMD n'est pas utilisable.
+# HCMDS: commands sent from the Mac at given times, in the form
+# "delay:command;delay:command" (delays in REAL seconds, cumulative).
+# To drive what runs before any Python script -- the MPYRUN launcher,
+# for example -- when HATARI.CMD cannot be used.
 SENDER=
 if [ -n "$HCMDS" ]; then
     (
@@ -114,8 +114,8 @@ if [ -n "$HCMDS" ]; then
     SENDER=$!
 fi
 
-# --addr24 off : sinon Hatari l'active lui-meme pour la TT-RAM et ouvre une
-# boite de dialogue qui bloque tout. perl/alarm : macOS n'a pas timeout(1).
+# --addr24 off: otherwise Hatari enables it itself for TT-RAM and opens a
+# dialog box that blocks everything. perl/alarm: macOS has no timeout(1).
 perl -e 'alarm shift; exec @ARGV' 300 "$HATARI" \
     --tos "$TOS" --machine "$MACHINE" ${CPULEVEL:+--cpulevel $CPULEVEL} ${MONITOR:+--monitor $MONITOR} \
     --addr24 off --ttram "$TTRAM" --fpu none --memsize "${MEMSIZE:-4}" \

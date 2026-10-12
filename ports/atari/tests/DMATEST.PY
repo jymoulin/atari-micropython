@@ -1,26 +1,26 @@
-# Test DMA / RAM alternative.
+# DMA / alternate RAM test.
 #
-# Le controleur DMA du ST ne sait pas adresser la RAM alternative. Si le
-# driver IDE de la carte ne fait pas de tampon intermediaire, toute lecture
-# de fichier vers un tampon du tas MicroPython (qui est en RAM alternative)
-# revient corrompue -- silencieusement.
+# The ST DMA controller cannot address alternate RAM. If the board's IDE
+# driver does not use an intermediate bounce buffer, any file read into a
+# buffer on the MicroPython heap (which lives in alternate RAM) comes back
+# corrupted -- silently.
 #
-# A lancer depuis un VRAI disque IDE. Sous Hatari le disque GEMDOS passe par
-# le systeme de fichiers de l'hote, sans le moindre DMA : le test y passera
-# toujours, ce qui ne prouve rien.
+# Run from a REAL IDE disk. Under Hatari the GEMDOS drive goes through the
+# host file system, with no DMA at all: the test will always pass there,
+# which proves nothing.
 #
-#   MPY.TTP DMATEST.PY        tas en RAM alternative (le cas a risque)
-#   MPY.TTP -s DMATEST.PY     tas en ST-RAM (le temoin)
+#   MPY.TTP DMATEST.PY        heap in alternate RAM (the risky case)
+#   MPY.TTP -s DMATEST.PY     heap in ST-RAM (the control)
 #
-# Le motif est construit UNE fois : a ~600 us le tour de boucle Python sur un
-# STE, tout le reste doit se faire par comparaisons de blocs, qui sont en C.
+# The pattern is built ONCE: at ~600 us per Python loop iteration on a
+# STE, everything else must be done by block comparisons, which are in C.
 
 import gc
 import time
 
 NAME = "DMATEST.TMP"
 CHUNK = 8192
-CHUNKS = 32                      # 256 Ko
+CHUNKS = 32                      # 256 KB
 
 print("--- preparation du motif ---")
 t0 = time.ticks_ms()
@@ -31,7 +31,7 @@ print("   %d octets en %d ms" % (CHUNK, time.ticks_ms() - t0))
 print("   motif a l'adresse 0x%x" % id(base))
 
 def estampille(n):
-    # Quatre octets en tete, pour qu'un bloc lu a la place d'un autre se voie.
+    # Four header bytes, so that a block read in place of another shows up.
     base[0] = 0x5A
     base[1] = n & 0xFF
     base[2] = (n >> 8) & 0xFF
@@ -62,10 +62,10 @@ for n in range(CHUNKS):
         print("NON  bloc %d : %d octets lus au lieu de %d" % (n, lu, CHUNK))
         erreurs += 1
         continue
-    if buf != base:                      # comparaison en C, pas en Python
+    if buf != base:                      # comparison in C, not in Python
         erreurs += 1
         if premier is None:
-            # On ne descend a l'octet que pour le premier bloc fautif.
+            # Only drill down to the byte for the first faulty block.
             for i in range(CHUNK):
                 if buf[i] != base[i]:
                     premier = (n, i, base[i], buf[i])

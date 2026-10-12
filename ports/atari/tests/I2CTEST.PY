@@ -1,13 +1,13 @@
-# Test du bus I2C de la TwiSTer (phase 4bis).
+# Test of the TwiSTer I2C bus (phase 4bis).
 #
-# Ce qu'on cherche a savoir, dans l'ordre :
-#   1. les registres sont-ils bien ceux de la MonSTer (0xFFFFFE02/04/06) ?
-#   2. SCL est-il relisable, donc le clock stretching possible ?
-#   3. le DS1307 de l'horloge repond-il a l'adresse 0x68 ?
+# What we want to find out, in order:
+#   1. are the registers really those of the MonSTer (0xFFFFFE02/04/06)?
+#   2. can SCL be read back, hence is clock stretching possible?
+#   3. does the clock's DS1307 answer at address 0x68?
 #
-# Un scan() qui rend [0x68] repond aux trois d'un coup.
+# A scan() that returns [0x68] answers all three at once.
 #
-# Ce test ne fait que LIRE. Il ne touche pas a l'heure du RTC.
+# This test only READS. It does not touch the RTC time.
 
 import machine
 import time

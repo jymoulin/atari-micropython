@@ -16,14 +16,14 @@ FLAGS_TOOL = $(CROSS_COMPILE)flags
 CFLAGS_TOOLS = -m68000 -msoft-float -Os -Wall -ffunction-sections -fdata-sections
 LDFLAGS_TOOLS = -msoft-float -s -Wl,--gc-sections
 
-# CACHEON.PRG est devenu un projet a part : ~/Documents/Dev/Atari/cache
+# CACHEON.PRG has become a separate project: ~/Documents/Dev/Atari/cache
 TOOLS = build/VIDEOREG.PRG build/FORCETST.TTP build/RUNTEST.PRG build/MPYRUN.PRG
 
 all: $(TOOLS)
 
-# Compilation et edition de liens separees, comme dans le Makefile du port
-# (ou c'est indispensable : -m68020 sur la ligne de link ferait choisir le
-# multilib m68020-60, dont la MiNTlib exige un 68881 au demarrage).
+# Separate compile and link steps, as in the port's Makefile
+# (where it is essential: -m68020 on the link line would select the
+# m68020-60 multilib, whose MiNTlib requires a 68881 at startup).
 build/%.o: tools/%.c | build
 	$(CC) $(CFLAGS_TOOLS) -c -o $@ $<
 
@@ -42,7 +42,7 @@ build/RUNTEST.PRG: build/runtest.o
 	$(FLAGS_TOOL) -f 0x01 $@
 	@echo "Ready: $@  (outil de test Hatari, voir tools/runtest.c)"
 
-# Le lanceur GEM : seul outil a avoir besoin de la gemlib.
+# The GEM launcher: the only tool that needs gemlib.
 build/MPYRUN.PRG: build/mpyrun.o
 	$(CC) $(LDFLAGS_TOOLS) -o $@ $< -lgem
 	$(FLAGS_TOOL) -f 0x01 $@

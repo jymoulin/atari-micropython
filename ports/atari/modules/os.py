@@ -76,25 +76,25 @@ def removedirs(name):
 
 
 class redirect:
-    """Rediriger une poignee standard GEMDOS le temps d'un bloc.
+    """Redirect a standard GEMDOS handle for the duration of a block.
 
         with redirect(1, open("OUT.TXT", "w")) as r:
             system("C:\\BIN\\LS.TTP")
 
-    La cible est un fichier ouvert ou un numero de poignee. Le fichier n'est
-    pas ferme en sortie du bloc : c'est a l'appelant, qui l'a ouvert.
+    The target is an open file or a handle number. The file is not
+    closed on leaving the block: that is up to the caller, who opened it.
 
-    ATTENTION : la redirection N'EST PAS ACQUISE sur cette machine. Elle a
-    fait redemarrer le STE le 15/09/2026 (Fclose de la poignee sauvee), puis
-    plante en bombes le 16/09 au meme endroit une fois ce Fclose retire.
-    Les sources ne concordent pas : le test dupbug.c de th.otto commente son
-    Fclose et MagiC comme FreeMiNT comptent des references que TOS n'a pas,
-    mais posix/system.c et stdio/popen.c de la MiNTlib font la sequence
-    complete, Fclose compris. Et unix/dup2.c avertit que TOS a un "double
-    re-direction bug". On prend donc le parti prudent : ne jamais fermer la
-    poignee sauvee. Sous MiNT et MagiC cela laisse filer une reference par
-    redirection, sans consequence a cette echelle.
-    A verifier avec FORCETST.TTP avant de s'appuyer dessus.
+    WARNING: redirection is NOT ESTABLISHED as safe on this machine. It
+    rebooted the STE on 15/09/2026 (Fclose of the saved handle), then
+    crashed with bombs on 16/09 at the same spot once that Fclose was removed.
+    The sources disagree: th.otto's dupbug.c test comments out its
+    Fclose, and MagiC as well as FreeMiNT keep reference counts that TOS
+    lacks, but MiNTlib's posix/system.c and stdio/popen.c do the full
+    sequence, Fclose included. And unix/dup2.c warns that TOS has a "double
+    re-direction bug". So we take the cautious side: never close the
+    saved handle. Under MiNT and MagiC this leaks one reference per
+    redirection, of no consequence at this scale.
+    To be checked with FORCETST.TTP before relying on it.
     """
 
     def __init__(self, std, target):
@@ -113,5 +113,5 @@ class redirect:
         import uos
         if self._saved is not None:
             uos.force(self._std, self._saved)
-            self._saved = None      # surtout PAS de uos.close() ici
+            self._saved = None      # above all, NO uos.close() here
         return False

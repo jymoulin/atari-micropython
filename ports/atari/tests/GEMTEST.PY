@@ -1,14 +1,14 @@
-# VDI et AES : module gem.
+# VDI and AES: gem module.
 #
-#   MPY.TTP GEMTEST.PY          a lancer DEPUIS LE BUREAU (il faut l'AES)
+#   MPY.TTP GEMTEST.PY          run FROM THE DESKTOP (the AES is needed)
 #
-# Le dessin se verifie tout seul : chaque trace est relu pixel par pixel avec
-# v_get_pixel. Puis trois interactions, a faire a la main :
-#   - une alerte a deux boutons : appuie sur Return (bouton par defaut, Non) ;
-#   - le selecteur de fichiers : appuie sur Return (OK, GEMTEST.PY propose) ;
-#   - une touche : appuie sur a.
-# Sous Hatari (argument "auto"), ces touches sont envoyees par le script
-# hatari-test.sh, et une capture d'ecran est prise apres le dessin.
+# The drawing checks itself: each shape is read back pixel by pixel with
+# v_get_pixel. Then three interactions, to be done by hand:
+#   - a two-button alert: press Return (default button, "Non");
+#   - the file selector: press Return (OK, GEMTEST.PY suggested);
+#   - a key: press a.
+# Under Hatari ("auto" argument), these keys are sent by the
+# hatari-test.sh script, and a screenshot is taken after the drawing.
 
 import gem
 import sys
@@ -18,8 +18,8 @@ import uos
 auto = "auto" in sys.argv[1:]
 ok = 0
 ko = 0
-# Pendant le dessin, RIEN ne doit s'afficher : la console ecrit sur le meme
-# ecran, et v_get_pixel relirait son texte au lieu de nos traces.
+# While drawing, NOTHING must be printed: the console writes to the same
+# screen, and v_get_pixel would read back its text instead of our shapes.
 differe = []
 
 
@@ -38,12 +38,12 @@ def verifie(nom, condition, detail=""):
 
 
 def hatari(cmd, attendre=True):
-    """Sous Hatari : fait executer une commande par hatari-test.sh.
+    """Under Hatari: have hatari-test.sh execute a command.
 
-    attendre=True attend qu'elle soit faite (capture d'ecran). Pour une
-    touche, attendre=False et appeler le dialogue AUSSITOT : le relais
-    l'envoie une demi-seconde plus tard, dialogue affiche. Envoyee avant,
-    elle serait prise par le guet du Ctrl-C et l'AES ne la verrait pas.
+    attendre=True waits until it is done (screenshot). For a key,
+    attendre=False and call the dialog IMMEDIATELY: the relay sends it
+    half a second later, with the dialog shown. Sent earlier, it would
+    be caught by the Ctrl-C watch and the AES would not see it.
     """
     if not auto:
         return
@@ -78,9 +78,10 @@ with gem.Screen() as s:
     verifie("fill_rect dedans", s.pixel(30, 25) == 1)
     verifie("fill_rect dehors", s.pixel(70, 25) == 0)
 
-    # Tout en fractions de l'ecran : 320 x 200 (Hatari, ST basse) comme
-    # 640 x 400 (monochrome) doivent tenir, sans rien dessiner au-dela du
-    # bord -- le VDI ne coupe pas sans clip et le trace revient par la gauche.
+    # Everything in fractions of the screen: 320 x 200 (Hatari, ST low) as
+    # well as 640 x 400 (monochrome) must fit, without drawing anything past
+    # the edge -- without a clip rectangle the VDI does not clip, and the
+    # shape wraps around to the left.
     W, H = s.width, s.height
     s.line(W // 4, 10, W // 2, 10)
     verifie("line", s.pixel(W * 3 // 8, 10) == 1 and s.pixel(W * 3 // 8, 12) == 0)
@@ -150,14 +151,14 @@ else:
 
 print()
 print("--- clavier ---")
-# La consigne passe par une alerte : avec -q, rien ne s'affiche a l'ecran,
-# et l'utilisateur ne pouvait pas deviner ce qu'on attendait de lui.
+# The instruction goes through an alert: with -q, nothing is shown on screen,
+# and the user could not guess what was expected of them.
 hatari("hatari-event keypress 28", attendre=False)
 gem.alert("Apres ce OK,\ntape n'importe quelle touche.", ("OK",))
 hatari("hatari-event keypress a", attendre=False)
 k = gem.wait_key()
-# A la main, n'importe quelle touche fait l'affaire : ce qu'on verifie, c'est
-# que wait_key rende un code de touche plausible, pas laquelle.
+# By hand, any key will do: what we check is that wait_key returns a
+# plausible key code, not which one.
 verifie("wait_key", (k & 0xFF) != 0 or (k >> 8) != 0, "0x%04x" % k)
 
 print()
