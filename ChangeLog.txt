@@ -1,3 +1,20 @@
+2026-10-15  Phase 8 : TLS dans MPY20SSL.TTP
+-----------------------------------------------------------
+make SSL=1 -> build-ssl/MPY20SSL.TTP (68020 seulement) : mbedTLS 3.6.6
+(sous-module lib/mbedtls), modules tls et ssl (manifest_ssl.py),
+hashlib md5/sha1 ; requests en HTTPS. 778 Ko contre 580 pour MPY20.
+mbedtls/mbedtls_config_port.h : MBEDTLS_HAVE_ASM (mulu.l 64 bits de
+bn_mul.h), ECP_NIST_OPTIM, ChaCha20-Poly1305, GCM_LARGE_TABLE.
+mbedtls/mbedtls_port.c : time(), mbedtls_ms_time, mp_hal_get_random
+(/dev/urandom sous MiNT, sinon gigue de compteurs en superviseur).
+mpconfigport.h : MICROPY_PY_SSL / MICROPY_SSL_MBEDTLS venus de make,
+TRACKED_ALLOC et hashlib md5/sha1 suivent.
+tests/TLSTEST.PY (5 verifications + "net"), ajoute a ALLTEST si tls.
+Hatari, boucle locale, client + serveur : poignee de main 11,7 s (TT,
+STinG v13), 32,6 s (Falcon, FreeMiNT/MiNTnet) ; 5/5 les deux. Debit
+chiffre TT : ChaCha20 30-40 Ko/s, AES-128-GCM 14 (9 avec AES-256 avant
+les grandes tables), AES-CBC 6.
+
 2026-10-15  Socket sur MiNTnet, STinG-LW v13, fork GitHub
 -----------------------------------------------------------
 modsocket.c : seconde pile, MiNTnet (sockets BSD de la MiNTLib), choisie

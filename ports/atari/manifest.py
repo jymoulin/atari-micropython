@@ -1,7 +1,7 @@
 # Frozen modules for the Atari TOS port.
 #
-# socket (modsocket.c, over STinG) is in C; requests rides on it (HTTP only:
-# HTTPS needs TLS, a later phase).
+# socket (modsocket.c, over STinG or MiNTnet) is in C; requests rides on it
+# (HTTP here; HTTPS with MPY20SSL.TTP, see manifest_ssl.py).
 #
 # We freeze base64.py directly (not via require()) to avoid pulling the
 # binascii.py shim from micropython-lib, which would shadow the C binascii

@@ -20,7 +20,8 @@
 #
 # Without options, hardware-dependent tests select themselves:
 # SNDTEST if the _SND cookie announces DMA sound, NATTEST if NATMOD.MPY is
-# present, NETTEST (127.0.0.1 loopback) if STinG or MiNTnet is there. Each test
+# present, NETTEST (127.0.0.1 loopback) if STinG or MiNTnet is there, TLSTEST
+# with MPY20SSL.TTP. Each test
 # runs in this same interpreter, in its own namespace; its output is shown normally, and its "ok",
 # "NON", "ECHEC" and "BILAN" lines are counted along the way.
 #
@@ -63,6 +64,11 @@ try:
     reseau = socket.stack() is not None
 except ImportError:
     reseau = False
+try:
+    import tls      # MPY20SSL.TTP only
+    chiffre = True
+except ImportError:
+    chiffre = False
 TESTS = [
     ("SMOKE", [], True, ""),
     ("ITERTEST", [], True, ""),
@@ -75,6 +81,7 @@ TESTS = [
     ("VIPTEST", [], True, ""),
     ("NATTEST", [], existe("NATMOD.MPY"), "NATMOD.MPY absent"),
     ("NETTEST", ["net"] if "net" in options else [], reseau, "ni STinG ni MiNTnet"),
+    ("TLSTEST", ["net"] if "net" in options else [], chiffre, "pas de tls (MPY20SSL)"),
     ("DISKTEST", [], "disk" in options, "option disk"),
     ("DMATEST", [], "dma" in options, "option dma"),
     ("I2CTEST", [], "i2c" in options, "option i2c"),

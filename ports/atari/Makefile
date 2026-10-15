@@ -2,8 +2,21 @@
 #   make               MPY20.TTP  68020 or better (STE + TwiSTer, TT, Falcon)
 #   make CPU=68000     MPY00.TTP  any machine, stock ST/STE included
 # Each has its own build directory, so both can be kept side by side.
+#   make SSL=1         MPY20SSL.TTP  MPY20 plus TLS (mbedTLS): ssl, tls,
+#                      HTTPS for requests; ~250 KB more, hence a binary of
+#                      its own
 CPU ?= 68020
-ifeq ($(CPU),68000)
+SSL ?= 0
+ifeq ($(SSL),1)
+ifneq ($(CPU),68020)
+$(error SSL=1 needs CPU=68020)
+endif
+BUILD ?= build-ssl
+MPY_TTP = MPY20SSL.TTP
+MICROPY_PY_SSL = 1
+MICROPY_SSL_MBEDTLS = 1
+FROZEN_MANIFEST ?= $(shell pwd)/manifest_ssl.py
+else ifeq ($(CPU),68000)
 BUILD ?= build-68000
 MPY_TTP = MPY00.TTP
 else ifeq ($(CPU),68020)
@@ -114,6 +127,12 @@ SRC_C = \
 	shared/runtime/interrupt_char.c \
 	shared/runtime/stdout_helpers.c \
 	shared/timeutils/timeutils.c \
+
+ifeq ($(SSL),1)
+SRC_C += mbedtls/mbedtls_port.c
+# mbedTLS itself: third-party code, its warnings are not ours to fix
+$(BUILD)/lib/mbedtls/%.o: CFLAGS += -Wno-all
+endif
 
 SRC_QSTR += shared/readline/readline.c shared/runtime/pyexec.c main.c modzlib.c
 SRC_QSTR += modatarios.c machine_atari.c machine_mem.c machine_uart.c

@@ -99,4 +99,7 @@ static inline int mp_hal_readline(vstr_t *line, const char *prompt) {
 }
 #define mp_hal_readline mp_hal_readline
 
+// Entropy for mbedTLS (mbedtls/mbedtls_port.c, MPY20SSL.TTP only).
+void mp_hal_get_random(size_t n, uint8_t *buf);
+
 #endif // MICROPY_INCLUDED_ATARI_MPHALPORT_H

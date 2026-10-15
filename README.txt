@@ -21,9 +21,11 @@ Le Falcon (68030) execute le meme binaire, sous TOS, MagiC ou FreeMiNT
 (ALLTEST 10/10 sous Hatari, Falcon + FreeMiNT 1.19 ; sockets par MiNTnet).
 Sous MiNT, les noms 8.3 sortent en minuscules (FSTEST compare sans casse).
 
-DEUX BINAIRES, nommes d'apres le processeur qu'ils demandent :
-  MPY20.TTP   make              68020 et plus : STE+TwiSTer, TT, Falcon
-  MPY00.TTP   make CPU=68000    toute machine, ST/STE d'origine compris
+TROIS BINAIRES, nommes d'apres le processeur qu'ils demandent :
+  MPY20.TTP     make              68020 et plus : STE+TwiSTer, TT, Falcon
+  MPY00.TTP     make CPU=68000    toute machine, ST/STE d'origine compris
+  MPY20SSL.TTP  make SSL=1        MPY20 + TLS (mbedTLS), ~780 Ko au lieu
+                                  de ~580 : ssl, tls, HTTPS de requests
 Chacun a son dossier (build/ et build-68000/). MPY20.TTP lance sur un
 68000 le dit et rend la main (cpucheck.c, compile en 68000 quoi qu'il
 arrive) ; MPY00.TTP tourne aussi sur 68020/030, plus lentement. Il faut
@@ -168,10 +170,30 @@ Phase 7   reseau : module socket sur STinG -- FAIT, NETTEST 26/26 sous
           Hatari (TT, STE TOS 2.06, ST 68000) ; a valider sur machine
           (net). MiNTnet (FreeMiNT) : FAIT (15/10), NETTEST 28/28 sous
           Hatari (Falcon, FreeMiNT 1.19, inet4 + lo0)
-Phase 8   TLS (BearSSL/mbedTLS) -- optionnel, lourd
+Phase 8   TLS -- FAIT (15/10) dans MPY20SSL.TTP (make SSL=1), mbedTLS
+          3.6.6 ; TLSTEST 5/5 sous Hatari (STinG v13 et MiNTnet)
 Phase 9   emetteurs natif, viper, asm_m68k -- FAITE, validee sur le STE
           (28/09/2026) : VIPERTEST 28/28, NATTEST 7/7, cache actif
 Abandonne ARexx (aucun equivalent Atari)
+
+PHASE 8 : TLS (MPY20SSL.TTP, make SSL=1)
+----------------------------------------
+mbedTLS de MicroPython (lib/mbedtls 3.6.6, extmod/modtls_mbedtls.c) :
+modules tls (C) et ssl (python, gele par manifest_ssl.py), hashlib md5 et
+sha1 ; requests fait du HTTPS (sans verifier le certificat, comme partout
+dans MicroPython). TLS 1.2 seulement (1.3 demanderait PSA, plus gros).
+Port : mbedtls/mbedtls_config_port.h (asm 68020 de bn_mul.h, NIST_OPTIM,
+ChaCha20-Poly1305, tables GCM 8 bits), mbedtls/mbedtls_port.c (time(),
+ms, aleat : /dev/urandom sous MiNT, sinon gigue compteur video / timer C
+du MFP / 200 Hz en superviseur). Memoire : tas du GC (TRACKED_ALLOC).
+Sous-module : "git submodule update" refuse le commit ; le recuperer par
+  cd lib/mbedtls && git fetch --depth 1 origin <commit> && git checkout <commit>
+Mesures Hatari, boucle locale, client ET serveur dans le meme programme
+(ECDHE-ECDSA P-256) : poignee de main 11,7 s sur TT 32 MHz, 32,6 s sur
+Falcon 16 MHz. Debit chiffre (chiffrer + dechiffrer, TT) : ChaCha20 30-40
+Ko/s, AES-128-GCM 14, AES-CBC 6 ; mbedTLS prefere ChaCha20.
+Test : tests/TLSTEST.PY (empreintes, poignee de main locale, 20000
+octets ; "net" : HTTPS vers example.com, requests.get).
 
 PHASE 7 : LE MODULE socket (modsocket.c, sur STinG ou MiNTnet)
 ---------------------------------------------------------------
@@ -695,5 +717,6 @@ en-tetes generes (genhdr/moduledefs.h) ne suivent pas la config.
   git submodule update --init --depth 1 lib/micropython-lib   # une fois
   cd ports/atari && make              # build/MPY20.TTP        (68020+)
   cd ports/atari && make CPU=68000    # build-68000/MPY00.TTP  (68000)
+  cd ports/atari && make SSL=1        # build-ssl/MPY20SSL.TTP (68020+, TLS)
   cd ports/atari && make -f Makefile.tools   # MPYRUN.PRG, RUNTEST.PRG...
 Toolchain dans le PATH pour mpy-cross-atari/natmod : /opt/cross-mint/bin.

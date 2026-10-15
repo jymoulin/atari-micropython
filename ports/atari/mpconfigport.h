@@ -95,8 +95,16 @@ extern void *atari_commit_exec(void *buf, size_t len, void *reloc);
 // We have our own os module (modatarios.c)
 #define MICROPY_PY_OS                   (0)
 
-// TLS deferred (no AmiSSL equivalent; BearSSL/mbedTLS is a later phase)
+// TLS: only in MPY20SSL.TTP (make SSL=1), which passes MICROPY_PY_SSL=1 and
+// MICROPY_SSL_MBEDTLS=1 on the command line. mbedTLS allocates on the GC
+// heap through the tracked allocator.
+#ifndef MICROPY_PY_SSL
 #define MICROPY_PY_SSL                  (0)
+#endif
+#ifndef MICROPY_SSL_MBEDTLS
+#define MICROPY_SSL_MBEDTLS             (0)
+#endif
+#define MICROPY_TRACKED_ALLOC           (MICROPY_SSL_MBEDTLS)
 
 // --- machine module: I2C on the TwiSTer/MonSTer bus ---
 //
@@ -135,9 +143,9 @@ extern void *atari_commit_exec(void *buf, size_t len, void *reloc);
 // No raw file I/O (we use POSIX VFS)
 #define MICROPY_PY_IO_FILEIO            (0)
 
-// MD5/SHA1 require mbedTLS/axTLS (not available)
-#define MICROPY_PY_HASHLIB_MD5          (0)
-#define MICROPY_PY_HASHLIB_SHA1         (0)
+// MD5/SHA1 come with mbedTLS: MPY20SSL.TTP only
+#define MICROPY_PY_HASHLIB_MD5          (MICROPY_SSL_MBEDTLS)
+#define MICROPY_PY_HASHLIB_SHA1         (MICROPY_SSL_MBEDTLS)
 
 // --- Features explicitly ENABLED ---
 
