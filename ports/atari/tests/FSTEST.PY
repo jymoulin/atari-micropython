@@ -60,7 +60,12 @@ f.close()
 
 chk("isfile", p.isfile(p.join(D, "HELLO.TXT")), True)
 chk("getsize", p.getsize(p.join(D, "HELLO.TXT")), 16)
-chk("listdir", sorted(os.listdir(D)), ["HELLO.TXT"])
+# FreeMiNT shows 8.3 names in lower case: compare without case
+def names(d):
+    return sorted(n.upper() for n in os.listdir(d))
+
+
+chk("listdir", names(D), ["HELLO.TXT"])
 
 st = os.stat(p.join(D, "HELLO.TXT"))
 print("   stat mode 0x%x, taille %d, mtime %d" % (st[0], st[6], st[8]))
@@ -73,7 +78,7 @@ f.close()
 
 print("--- renommage et effacement ---")
 os.rename(p.join(D, "HELLO.TXT"), p.join(D, "SALUT.TXT"))
-chk("apres rename", os.listdir(D), ["SALUT.TXT"])
+chk("apres rename", names(D), ["SALUT.TXT"])
 
 print("--- walk ---")
 os.mkdir(p.join(D, "SUB"))

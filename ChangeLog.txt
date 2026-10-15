@@ -1,3 +1,25 @@
+2026-10-15  Socket sur MiNTnet, STinG-LW v13, fork GitHub
+-----------------------------------------------------------
+modsocket.c : seconde pile, MiNTnet (sockets BSD de la MiNTLib), choisie
+si le cookie MiNT est la et qu'un socket AF_INET s'ouvre ; sinon STinG.
+Descripteurs non bloquants, attentes par poll() en tranches de 20 ms
+(Ctrl-C), getaddrinfo par gethostbyname, setsockopt traduit (SO_REUSEADDR,
+SO_BROADCAST, TCP_NODELAY). socket.stack() -> 'MiNTnet'/'STinG'/None.
+Binaire +22 Ko. "STinG not loaded" devient "no TCP/IP stack (STinG or
+MiNTnet)".
+STinG-LW v13 : TCP_NODELAY par CN_setopt(CNO_TCP_NODELAY) (ignore avant
+v13) ; l'ecoute gardee apres accept() sert les clients en file.
+NETTEST (28 verifications) : socket.stack(), listen(2), test "deux clients
+avant accept" (saute sur STinG < v13), ecrire-ecrire-lire avec
+TCP_NODELAY. ALLTEST lance NETTEST si une pile est la. FSTEST compare les
+noms sans casse (MiNT les donne en minuscules).
+Sous Hatari : MiNTnet (Falcon, FreeMiNT 1.19, banc mint/reseau/tools/
+hatari-net.sh) 28/28, 123 Ko/s en boucle locale ; STinG v13 28/28,
+279 Ko/s, ecrire-ecrire-lire x10 en 0,2 s ; KIT v9 27/27, 2,5 s.
+ALLTEST sous FreeMiNT : 10 ok (HWTEST retire : il attend une touche en
+mono), FSTEST 25/25 apres correction.
+Depot pousse sur git@github.com:jymoulin/atari-micropython (atari-port).
+
 2026-10-12  Commentaires du code en anglais
 -----------------------------------------------------------
 Tous les commentaires et docstrings francais des sources du port

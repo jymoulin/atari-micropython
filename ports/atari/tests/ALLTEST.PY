@@ -20,7 +20,7 @@
 #
 # Without options, hardware-dependent tests select themselves:
 # SNDTEST if the _SND cookie announces DMA sound, NATTEST if NATMOD.MPY is
-# present, NETTEST (127.0.0.1 loopback) if STinG is loaded. Each test
+# present, NETTEST (127.0.0.1 loopback) if STinG or MiNTnet is there. Each test
 # runs in this same interpreter, in its own namespace; its output is shown normally, and its "ok",
 # "NON", "ECHEC" and "BILAN" lines are counted along the way.
 #
@@ -60,9 +60,9 @@ def cookie(nom, defaut=0):
 son_dma = bool(cookie("_SND") & 2)
 try:
     import socket
-    sting = socket.sting() is not None
+    reseau = socket.stack() is not None
 except ImportError:
-    sting = False
+    reseau = False
 TESTS = [
     ("SMOKE", [], True, ""),
     ("ITERTEST", [], True, ""),
@@ -74,7 +74,7 @@ TESTS = [
     ("SNDTEST", [], son_dma, "pas de son DMA (_SND)"),
     ("VIPTEST", [], True, ""),
     ("NATTEST", [], existe("NATMOD.MPY"), "NATMOD.MPY absent"),
-    ("NETTEST", ["net"] if "net" in options else [], sting, "STinG absent"),
+    ("NETTEST", ["net"] if "net" in options else [], reseau, "ni STinG ni MiNTnet"),
     ("DISKTEST", [], "disk" in options, "option disk"),
     ("DMATEST", [], "dma" in options, "option dma"),
     ("I2CTEST", [], "i2c" in options, "option i2c"),

@@ -1,12 +1,12 @@
-# The socket module, on top of STinG.
+# The socket module, on top of STinG (TOS) or MiNTnet (FreeMiNT).
 #
 #   MPY20.TTP NETTEST.PY          loopback 127.0.0.1: no network
 #   MPY20.TTP NETTEST.PY net      plus DNS and HTTP to the outside
 #   MPY20.TTP NETTEST.PY net example.com    another HTTP server
 #
-# Without STinG in memory: the test says so and stops (nothing to check).
-# Server and client are in this same program: STinG runs its connections
-# by itself (interrupts), we simply alternate the calls.
+# Without a TCP/IP stack: the test says so and stops (nothing to check).
+# Server and client are in this same program: the stack runs its
+# connections by itself (interrupts, kernel), we simply alternate the calls.
 
 import sys
 import socket
@@ -65,14 +65,14 @@ def recoit(s, n):
     return b"".join(morceaux)
 
 
-info = socket.sting()
-if info is None:
-    print("STinG n'est pas charge : rien a tester")
+pile = socket.stack()
+if pile is None:
+    print("ni STinG ni MiNTnet : rien a tester")
     print("BILAN : OK")
     print("FIN DU TEST")
     raise SystemExit
 
-print("STinG :", info)
+print("pile :", pile, socket.sting() or "")
 
 section("adresses")
 check("getaddrinfo litteral", socket.getaddrinfo(LOCAL, 80)[0][-1], (LOCAL, 80))
@@ -84,7 +84,7 @@ section("TCP en boucle locale")
 srv = socket.socket()
 srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 srv.bind((LOCAL, PORT))
-srv.listen(1)
+srv.listen(2)
 check("getsockname du serveur", srv.getsockname()[1], PORT)
 
 cli = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -139,6 +139,20 @@ f = conn.makefile("rb")
 check("readline 1", f.readline(), b"ligne 1\n")
 check("readline 2", f.readline(), b"ligne 2\n")
 
+# write-write-read: with Nagle, the second byte waits for the (delayed) ACK
+# of the first one. STinG before v13 ignores TCP_NODELAY.
+cli.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+t0 = time.ticks_ms()
+for i in range(10):
+    cli.send(b"a")
+    cli.send(b"b")
+    recoit(conn, 2)
+    conn.send(b"c")
+    recoit(cli, 1)
+print("   10 x (ecrire, ecrire, lire) avec TCP_NODELAY : %d ms" % time.ticks_diff(time.ticks_ms(), t0))
+check("TCP_NODELAY accepte", True, True)
+
 conn.settimeout(0.5)
 t0 = time.ticks_ms()
 e = erreur(lambda: conn.recv(10))
@@ -173,6 +187,28 @@ cli2.send(b"encore")
 check("deuxieme connexion", recoit(conn2, 6), b"encore")
 conn2.close()
 cli2.close()
+
+section("deux clients avant accept")
+# BSD sockets have a backlog; STinG-LW keeps listening from v13 on.
+c1 = socket.socket()
+c2 = socket.socket()
+c1.settimeout(3)
+c2.settimeout(3)
+e = erreur(lambda: c1.connect((LOCAL, PORT))) or erreur(lambda: c2.connect((LOCAL, PORT)))
+if e is None:
+    a1, _ = srv.accept()
+    a2, _ = srv.accept()
+    c1.send(b"un")
+    c2.send(b"deux")
+    check("deux clients en file", (recoit(a1, 2), recoit(a2, 4)), (b"un", b"deux"))
+    a1.close()
+    a2.close()
+elif pile == "STinG":
+    print("   --    deux clients en file : non (STinG avant v13 ?)", e)
+else:
+    check("deux clients en file", e, None)
+c1.close()
+c2.close()
 srv.close()
 
 with socket.socket() as s:

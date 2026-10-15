@@ -17,8 +17,9 @@ MACHINE CIBLE
 -------------
 Atari STE + carte TwiSTer : 68020 a 24 MHz, 8 Mo de RAM alternative,
 bus IDE, USB et I2C. TOS 2.06 ou EmuTOS, avec Geneva et Teradesk.
-Le Falcon (68030) execute le meme binaire. FreeMiNT : plus tard, sur
-Falcon d'abord.
+Le Falcon (68030) execute le meme binaire, sous TOS, MagiC ou FreeMiNT
+(ALLTEST 10/10 sous Hatari, Falcon + FreeMiNT 1.19 ; sockets par MiNTnet).
+Sous MiNT, les noms 8.3 sortent en minuscules (FSTEST compare sans casse).
 
 DEUX BINAIRES, nommes d'apres le processeur qu'ils demandent :
   MPY20.TTP   make              68020 et plus : STE+TwiSTer, TT, Falcon
@@ -144,7 +145,8 @@ make, make CPU=68000, et la serie de tests sous Hatari.
 Passage 1.28 -> 1.29 (30/09/2026) : aucun conflit de texte. Seul
 changement subi : py/mkrules.mk lit LIBS et non plus LIB.
 "origin" pointe sur github.com/micropython/micropython : ne jamais y
-pousser. Pour publier, ajouter un remote vers le fork personnel.
+pousser. Publication : remote "fork" = git@github.com:jymoulin/atari-micropython
+(branche atari-port, poussee le 15/10/2026).
 
 PLAN
 ----
@@ -164,14 +166,27 @@ Phase 6   VDI, dialogues AES et fenetres -- FAITE. Sur le STE (23/09) en
           COMPLETE
 Phase 7   reseau : module socket sur STinG -- FAIT, NETTEST 26/26 sous
           Hatari (TT, STE TOS 2.06, ST 68000) ; a valider sur machine
-          (net). MiNTnet (FreeMiNT) : plus tard
+          (net). MiNTnet (FreeMiNT) : FAIT (15/10), NETTEST 28/28 sous
+          Hatari (Falcon, FreeMiNT 1.19, inet4 + lo0)
 Phase 8   TLS (BearSSL/mbedTLS) -- optionnel, lourd
 Phase 9   emetteurs natif, viper, asm_m68k -- FAITE, validee sur le STE
           (28/09/2026) : VIPERTEST 28/28, NATTEST 7/7, cache actif
 Abandonne ARexx (aucun equivalent Atari)
 
-PHASE 7 : LE MODULE socket (modsocket.c, sur STinG)
----------------------------------------------------
+PHASE 7 : LE MODULE socket (modsocket.c, sur STinG ou MiNTnet)
+---------------------------------------------------------------
+Pile choisie une fois : MiNTnet si le cookie MiNT est la et qu'un socket
+AF_INET s'ouvre (inet4.xdd charge), sinon STinG. socket.stack() rend
+'MiNTnet', 'STinG' ou None. MiNTnet : sockets BSD de la MiNTLib,
+descripteurs toujours non bloquants, attentes par poll() en tranches de
+20 ms (Ctrl-C), errno de la MiNTLib = MP_Exxx ; getaddrinfo par
+gethostbyname (/etc/hosts, /etc/resolv.conf). +22 Ko de binaire.
+setsockopt : SO_REUSEADDR, SO_BROADCAST, TCP_NODELAY traduits pour
+MiNTnet ; sous STinG seul TCP_NODELAY compte (CN_setopt, v13).
+Banc Hatari FreeMiNT : ~/Documents/Dev/Atari/mint/reseau/tools/
+hatari-net.sh (disquette 2,88 Mo, Falcon, inet4 + dummy.xif), une ligne
+"exec u:/a/bin/MPY20.TTP u:/a/bin/NETTEST.PY" dans le .cnf.
+
 API des sockets de MicroPython : socket(), bind, listen, accept, connect,
 send, sendall, recv, sendto, recvfrom, settimeout, setblocking, makefile,
 read/readline/write, getsockname, getpeername, with ; getaddrinfo (DNS par
@@ -183,15 +198,15 @@ mot). Un trampoline asm (atari_sting_call) recopie un bloc de mots prepare
 par la macro TPL(idx, W(..), L(..)) : pas d'en-tete STinG a inclure.
 Ecarts avec BSD, dus a STinG :
   - un handle = une connexion : accept() passe le handle au nouveau socket
-    et rouvre une ecoute sur le port. STinG-LW refuse cette reouverture
-    tant qu'une connexion occupe le port (tcp_bind sans SO_REUSE) : le
-    serveur ne sert qu'un client a la fois, et un client qui arrive
-    entre-temps est refuse. A corriger dans STinG-LW (SOF_REUSEADDR, ou
-    garder le pcb d'ecoute et mettre les connexions acceptees en file).
+    et rouvre une ecoute sur le port. STinG-LW v13 (noyau 92b5414c) garde
+    l'ecoute et met les clients suivants en file (4) : NETTEST 28/28.
+    Avant v13, la reouverture echoue tant qu'une connexion occupe le
+    port : un client a la fois, les autres refuses.
   - UDP : un handle se fixe sur le premier correspondant ; sendto vers un
     autre rouvre le handle (meme port local).
-  - pas de TCP_NODELAY (CN_setopt rend E_NOROUTINE) : send() decoupe en
-    segments entiers (4 x 1460) pour ne pas laisser Nagle retenir la fin.
+  - TCP_NODELAY : CN_setopt(CNO_TCP_NODELAY) depuis v13 ; avant,
+    E_NOROUTINE, ignore. send() decoupe toujours en segments entiers
+    (4 x 1460). Ecrire-ecrire-lire x 10 : 2,5 s en v9, 0,2 s en v13.
 Les handles ouverts sont notes et fermes a la sortie (atari_socket_
 shutdown) : STinG les garderait sinon. Sur 68000, le GC coute plus que la
 pile : recv() n'alloue que ce qui est arrive ; preferer readinto() et des

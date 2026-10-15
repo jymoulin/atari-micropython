@@ -1,4 +1,12 @@
-// socket module over STinG (TCP/IP stack for TOS, cookie 'STiK').
+// socket module over STinG (TCP/IP stack for TOS, cookie 'STiK') or
+// MiNTnet (the BSD sockets of FreeMiNT, through the MiNTLib).
+//
+// The stack is chosen once: MiNTnet when the 'MiNT' cookie is there and
+// the kernel opens an AF_INET socket (inet4.xdd loaded), else STinG.
+//
+// MiNTnet: descriptors are always non-blocking; blocking calls and
+// timeouts are done here with poll(), in short slices so that Ctrl-C keeps
+// working. MiNTLib errno values are what MP_Exxx use, no translation.
 //
 // STinG publishes a table of functions (TPL) behind its cookie. They follow
 // the Pure C convention: arguments on the stack in their natural size (a
@@ -12,8 +20,9 @@
 //   - one handle is one connection. A passive TCP_open waits for one peer
 //     and then BECOMES that connection. accept() hands the handle to the new
 //     socket and opens a fresh passive one on the same port for the next
-//     client. With STinG-LW (lwIP) that reopening fails while the previous
-//     connection still uses the port; accept() keeps retrying until it can.
+//     client. STinG-LW v13 keeps listening meanwhile and queues the clients
+//     that arrive; before v13 the reopening fails while the previous
+//     connection still uses the port, and accept() keeps retrying.
 //   - a UDP handle locks onto the first peer that talks to it, and sends to
 //     one peer only: sendto() to another address reopens the handle (same
 //     local port).
@@ -26,6 +35,15 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <poll.h>
+#include <netdb.h>
+#include <sys/ioctl.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
 
 #include "py/runtime.h"
 #include "py/stream.h"
@@ -82,6 +100,7 @@ enum {
     CNget_char, CNget_NDB, CNget_block, housekeep, resolve, ser_disable,
     ser_enable, set_flag, clear_flag, CNgetinfo, on_port, off_port, setvstr,
     query_port, CNgets, ICMP_send, ICMP_handler, ICMP_discard, TCP_info,
+    cntrl_port, UDP_info, RAW_open, RAW_close, RAW_out, CN_setopt, CN_getopt,
     TPL_COUNT
 };
 
@@ -147,14 +166,17 @@ typedef struct {
 #define E_USERTIMEOUT   (-15)
 #define E_CNTIMEOUT     (-16)
 #define E_UNREACHABLE   (-24)
+#define E_NOROUTINE     (-26)
 #define E_PARAMETER     (-30)
 
+#define CNO_TCP_NODELAY 0x5401  // CN_setopt, STinG-LW v13
+
 #define TCP_BUFFER      8192    // advisory buffer size for the old TCP.STX
-// STinG has no TCP_NODELAY: a segment shorter than the MSS waits (Nagle)
-// for the previous ones to be acknowledged, and the peer delays its ACKs.
-// So big writes go out in whole segments.
-#define TCP_MSS         1460
-#define SEND_CHUNK      (4 * TCP_MSS)
+// Before v13 STinG has no TCP_NODELAY: a segment shorter than the MSS waits
+// (Nagle) for the previous ones to be acknowledged, and the peer delays its
+// ACKs. So big writes go out in whole segments.
+#define STING_MSS       1460
+#define SEND_CHUNK      (4 * STING_MSS)
 
 static tpl_t *sting_tpl;
 
@@ -173,10 +195,37 @@ static tpl_t *sting_find(void) {
     return sting_tpl;
 }
 
-static void sting_need(void) {
-    if (sting_find() == NULL) {
-        mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("STinG not loaded"));
+// ---------------------------------------------------------------------------
+// Which stack
+// ---------------------------------------------------------------------------
+
+enum { NET_NONE, NET_MINT, NET_STING };
+static int8_t net_stack = -1;
+
+static int net_find(void) {
+    if (net_stack <= NET_NONE) {
+        net_stack = NET_NONE;
+        uint32_t v;
+        if (atari_get_cookie("MiNT", &v)) {
+            int fd = socket(AF_INET, SOCK_DGRAM, 0);
+            if (fd >= 0) {
+                close(fd);
+                net_stack = NET_MINT;
+            }
+        }
+        if (net_stack == NET_NONE && sting_find() != NULL) {
+            net_stack = NET_STING;
+        }
     }
+    return net_stack;
+}
+
+static int net_need(void) {
+    int n = net_find();
+    if (n == NET_NONE) {
+        mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("no TCP/IP stack (STinG or MiNTnet)"));
+    }
+    return n;
 }
 
 static int errno_of(int e) {
@@ -305,7 +354,19 @@ static int host_lookup(const char *host, uint32_t *list, int max) {
         list[0] = 0x7f000001;
         return 1;
     }
-    sting_need();
+    if (net_need() == NET_MINT) {
+        // MiNTLib resolver: /etc/hosts, then the servers of /etc/resolv.conf
+        struct hostent *he = gethostbyname(host);
+        if (he == NULL || he->h_addrtype != AF_INET || he->h_addr_list[0] == NULL) {
+            mp_raise_msg_varg(&mp_type_OSError, MP_ERROR_TEXT("MiNTnet: can't resolve %s"), host);
+        }
+        int n = 0;
+        while (n < max && he->h_addr_list[n] != NULL) {
+            memcpy(&list[n], he->h_addr_list[n], 4);
+            n++;
+        }
+        return n;
+    }
     int16_t n = (int16_t)TPL(resolve, L(host), L(0), L(list), W(max));
     if (n <= 0) {
         sting_raise(n < 0 ? n : -17);   // E_CANTRESOLVE
@@ -336,8 +397,10 @@ static void parse_addr(mp_obj_t addr, uint32_t *ip, uint16_t *port) {
 
 typedef struct {
     mp_obj_base_t base;
-    int16_t handle;             // STinG handle, -1 if none
+    int16_t handle;             // STinG handle or MiNT descriptor, -1 if none
     uint8_t type;               // MOD_SOCK_STREAM or MOD_SOCK_DGRAM
+    bool mint;                  // MiNTnet socket, else STinG
+    bool nodelay;               // STinG: TCP_NODELAY asked for
     bool listening;
     bool connecting;            // non-blocking connect in progress
     bool closed;
@@ -382,9 +445,110 @@ static void sock_check_open(socket_obj_t *s) {
     }
 }
 
+// --- MiNTnet helpers
+
+#define MINT_SLICE_MS   20      // poll() slice between two Ctrl-C checks
+
+// Wait until the descriptor has one of the poll() events, within the
+// socket's timeout. Returns 0 when ready, else MP_EAGAIN, MP_ETIMEDOUT or
+// the errno of poll().
+static int mint_wait(socket_obj_t *s, short events) {
+    if (s->timeout_ms == 0) {
+        return MP_EAGAIN;
+    }
+    mp_uint_t t0 = mp_hal_ticks_ms();
+    for (;;) {
+        long slice = MINT_SLICE_MS;
+        if (s->timeout_ms > 0) {
+            mp_uint_t el = mp_hal_ticks_ms() - t0;
+            if (el >= (mp_uint_t)s->timeout_ms) {
+                return MP_ETIMEDOUT;
+            }
+            if ((mp_uint_t)s->timeout_ms - el < (mp_uint_t)slice) {
+                slice = s->timeout_ms - el;
+            }
+        }
+        struct pollfd p = { s->handle, events, 0 };
+        int r = poll(&p, 1, slice);
+        if (r > 0) {
+            return 0;
+        }
+        if (r < 0 && errno != EINTR) {
+            return errno;
+        }
+        mp_event_handle_nowait();
+    }
+}
+
+static void mint_sockaddr(struct sockaddr_in *sa, uint32_t ip, uint16_t port) {
+    memset(sa, 0, sizeof(*sa));
+    sa->sin_family = AF_INET;
+    sa->sin_port = htons(port);
+    sa->sin_addr.s_addr = htonl(ip);
+}
+
+static mp_obj_t mint_addr_tuple(const struct sockaddr_in *sa) {
+    return addr_tuple(ntohl(sa->sin_addr.s_addr), ntohs(sa->sin_port));
+}
+
+static void mint_nonblock(int fd) {
+    fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK);
+}
+
+// Bytes waiting on a descriptor that poll() found readable; 0 if the kernel
+// cannot tell (end of stream, or no FIONREAD).
+static mp_uint_t mint_pending(int fd) {
+    long n = 0;
+    if (ioctl(fd, FIONREAD, &n) < 0 || n < 0) {
+        return 0;
+    }
+    return n;
+}
+
+static mp_uint_t mint_read(socket_obj_t *s, void *buf, mp_uint_t len, struct sockaddr_in *from, int *errcode) {
+    for (;;) {
+        socklen_t n = sizeof(*from);
+        long r = from ? recvfrom(s->handle, buf, len, 0, (struct sockaddr *)from, &n)
+            : recv(s->handle, buf, len, 0);
+        if (r >= 0) {
+            return r;
+        }
+        int e = errno;
+        if (e == EAGAIN) {
+            e = mint_wait(s, POLLIN);
+        }
+        if (e) {
+            *errcode = e;
+            return MP_STREAM_ERROR;
+        }
+    }
+}
+
+static mp_uint_t mint_write(socket_obj_t *s, const void *buf, mp_uint_t len, const struct sockaddr_in *to, int *errcode) {
+    for (;;) {
+        long r = to ? sendto(s->handle, buf, len, 0, (const struct sockaddr *)to, sizeof(*to))
+            : send(s->handle, buf, len, 0);
+        if (r >= 0) {
+            return r;
+        }
+        int e = errno;
+        if (e == EAGAIN) {
+            e = mint_wait(s, POLLOUT);
+        }
+        if (e) {
+            *errcode = e;
+            return MP_STREAM_ERROR;
+        }
+    }
+}
+
+static MP_NORETURN void mint_raise(void) {
+    mp_raise_OSError(errno);
+}
+
 static mp_obj_t socket_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     mp_arg_check_num(n_args, n_kw, 0, 3, false);
-    sting_need();
+    int stack = net_need();
     int af = n_args > 0 ? mp_obj_get_int(args[0]) : MOD_AF_INET;
     int st = n_args > 1 ? mp_obj_get_int(args[1]) : MOD_SOCK_STREAM;
     if (af != MOD_AF_INET || (st != MOD_SOCK_STREAM && st != MOD_SOCK_DGRAM)) {
@@ -393,6 +557,16 @@ static mp_obj_t socket_make_new(const mp_obj_type_t *type, size_t n_args, size_t
     socket_obj_t *s = mp_obj_malloc_with_finaliser(socket_obj_t, type);
     s->handle = -1;
     s->type = st;
+    s->mint = stack == NET_MINT;
+    s->nodelay = false;
+    if (s->mint) {
+        int fd = socket(AF_INET, st == MOD_SOCK_STREAM ? SOCK_STREAM : SOCK_DGRAM, 0);
+        if (fd < 0) {
+            mint_raise();
+        }
+        mint_nonblock(fd);
+        s->handle = fd;
+    }
     s->listening = false;
     s->connecting = false;
     s->closed = false;
@@ -406,10 +580,23 @@ static mp_obj_t socket_make_new(const mp_obj_type_t *type, size_t n_args, size_t
 
 static void sock_close(socket_obj_t *s) {
     if (s->handle >= 0) {
-        handle_close(s->handle, IS_TCP(s));
+        if (s->mint) {
+            close(s->handle);
+        } else {
+            handle_close(s->handle, IS_TCP(s));
+        }
         s->handle = -1;
     }
     s->closed = true;
+}
+
+// STinG-LW v13: TCP_NODELAY on a handle (on a listening one, it goes to the
+// connection accepted). Older kernels answer E_NOROUTINE: ignored.
+static void sting_apply_nodelay(socket_obj_t *s) {
+    if (s->nodelay && s->handle >= 0 && sting_tpl->fn[CN_setopt] != NULL) {
+        int16_t one = 1;
+        TPL(CN_setopt, W(s->handle), W(CNO_TCP_NODELAY), L(&one), W(sizeof(one)));
+    }
 }
 
 // --- UDP: a handle towards (rhost, rport), or open to anyone if rhost is 0.
@@ -444,6 +631,7 @@ static int16_t tcp_listen_open(socket_obj_t *s) {
         note_open(h, true);
         s->handle = h;
         s->lport = handle_info(h)->address.lport;
+        sting_apply_nodelay(s);
     }
     return h;
 }
@@ -452,6 +640,14 @@ static mp_obj_t socket_bind(mp_obj_t self_in, mp_obj_t addr) {
     socket_obj_t *s = MP_OBJ_TO_PTR(self_in);
     sock_check_open(s);
     parse_addr(addr, &s->lhost, &s->lport);
+    if (s->mint) {
+        struct sockaddr_in sa;
+        mint_sockaddr(&sa, s->lhost, s->lport);
+        if (bind(s->handle, (struct sockaddr *)&sa, sizeof(sa)) < 0) {
+            mint_raise();
+        }
+        return mp_const_none;
+    }
     if (!IS_TCP(s)) {
         udp_open(s, 0, 0);
     }
@@ -462,6 +658,13 @@ static MP_DEFINE_CONST_FUN_OBJ_2(socket_bind_obj, socket_bind);
 static mp_obj_t socket_listen(size_t n_args, const mp_obj_t *args) {
     socket_obj_t *s = MP_OBJ_TO_PTR(args[0]);
     sock_check_open(s);
+    if (s->mint) {
+        if (listen(s->handle, n_args > 1 ? mp_obj_get_int(args[1]) : 4) < 0) {
+            mint_raise();
+        }
+        s->listening = true;
+        return mp_const_none;
+    }
     if (!IS_TCP(s) || s->handle >= 0) {
         mp_raise_OSError(MP_EINVAL);
     }
@@ -482,6 +685,32 @@ static mp_obj_t socket_accept(mp_obj_t self_in) {
     sock_check_open(s);
     if (!s->listening) {
         mp_raise_OSError(MP_EINVAL);
+    }
+    if (s->mint) {
+        socket_obj_t *c = mp_obj_malloc_with_finaliser(socket_obj_t, &socket_type);
+        *c = *s;
+        c->handle = -1;
+        c->listening = false;
+        c->timeout_ms = -1;
+        struct sockaddr_in sa;
+        for (;;) {
+            socklen_t n = sizeof(sa);
+            int fd = accept(s->handle, (struct sockaddr *)&sa, &n);
+            if (fd >= 0) {
+                mint_nonblock(fd);
+                c->handle = fd;
+                break;
+            }
+            int e = errno;
+            if (e == EAGAIN) {
+                e = mint_wait(s, POLLIN);
+            }
+            if (e) {
+                mp_raise_OSError(e);
+            }
+        }
+        mp_obj_t t[2] = { MP_OBJ_FROM_PTR(c), mint_addr_tuple(&sa) };
+        return mp_obj_new_tuple(2, t);
     }
     mp_uint_t t0 = mp_hal_ticks_ms();
     for (;;) {
@@ -527,6 +756,30 @@ static mp_obj_t socket_connect(mp_obj_t self_in, mp_obj_t addr) {
     uint32_t rhost;
     uint16_t rport;
     parse_addr(addr, &rhost, &rport);
+    if (s->mint) {
+        struct sockaddr_in sa;
+        mint_sockaddr(&sa, rhost, rport);
+        if (connect(s->handle, (struct sockaddr *)&sa, sizeof(sa)) == 0) {
+            return mp_const_none;
+        }
+        int e = errno;
+        if (e != EINPROGRESS && e != EAGAIN) {
+            mp_raise_OSError(e);
+        }
+        e = mint_wait(s, POLLOUT);
+        if (e) {
+            mp_raise_OSError(e == MP_EAGAIN ? MP_EINPROGRESS : e);
+        }
+        int err = 0;
+        socklen_t n = sizeof(err);
+        if (getsockopt(s->handle, SOL_SOCKET, SO_ERROR, &err, &n) < 0) {
+            err = errno;
+        }
+        if (err) {
+            mp_raise_OSError(err);
+        }
+        return mp_const_none;
+    }
     if (!IS_TCP(s)) {
         udp_open(s, rhost, rport);
         return mp_const_none;
@@ -541,6 +794,7 @@ static mp_obj_t socket_connect(mp_obj_t self_in, mp_obj_t addr) {
     }
     note_open(h, true);
     s->handle = h;
+    sting_apply_nodelay(s);
     mp_uint_t t0 = mp_hal_ticks_ms();
     for (;;) {
         int st = tcp_state(h);
@@ -572,15 +826,15 @@ static mp_uint_t tcp_send(socket_obj_t *s, const uint8_t *buf, mp_uint_t len, in
     mp_uint_t t0 = mp_hal_ticks_ms();
     while (done < len) {
         mp_uint_t n = len - done < chunk ? len - done : chunk;
-        if (n < len - done && n > TCP_MSS) {
-            n -= n % TCP_MSS;   // full segments, or Nagle holds the tail
+        if (n < len - done && n > STING_MSS) {
+            n -= n % STING_MSS;   // full segments, or Nagle holds the tail
         }
         int16_t r = (int16_t)TPL(TCP_send, W(s->handle), L(buf + done), W(n));
         if (r == E_NORMAL) {
             done += n;
             continue;
         }
-        if (r == E_OBUFFULL && n > TCP_MSS) {
+        if (r == E_OBUFFULL && n > STING_MSS) {
             chunk = n / 2;      // less room than that: try smaller
             continue;
         }
@@ -673,6 +927,9 @@ static mp_uint_t sock_read(mp_obj_t self_in, void *buf, mp_uint_t len, int *errc
         *errcode = s->closed ? MP_EBADF : MP_ENOTCONN;
         return MP_STREAM_ERROR;
     }
+    if (s->mint) {
+        return mint_read(s, buf, len, NULL, errcode);
+    }
     return IS_TCP(s) ? tcp_recv(s, buf, len, errcode) : udp_recv(s, buf, len, errcode);
 }
 
@@ -681,6 +938,9 @@ static mp_uint_t sock_write(mp_obj_t self_in, const void *buf, mp_uint_t len, in
     if (s->closed || s->handle < 0 || s->listening) {
         *errcode = s->closed ? MP_EBADF : MP_ENOTCONN;
         return MP_STREAM_ERROR;
+    }
+    if (s->mint) {
+        return mint_write(s, buf, len, NULL, errcode);
     }
     if (IS_TCP(s)) {
         return tcp_send(s, buf, len, errcode);
@@ -710,6 +970,23 @@ static mp_uint_t sock_ioctl(mp_obj_t self_in, mp_uint_t request, uintptr_t arg, 
         mp_uint_t ret = 0;
         if (s->handle < 0) {
             return 0;
+        }
+        if (s->mint) {
+            struct pollfd p = { s->handle, 0, 0 };
+            if (arg & MP_STREAM_POLL_RD) {
+                p.events |= POLLIN;
+            }
+            if (arg & MP_STREAM_POLL_WR) {
+                p.events |= POLLOUT;
+            }
+            if (poll(&p, 1, 0) > 0) {
+                ret = (p.revents & POLLIN ? MP_STREAM_POLL_RD : 0)
+                    | (p.revents & POLLOUT ? MP_STREAM_POLL_WR : 0)
+                    | (p.revents & POLLHUP ? MP_STREAM_POLL_HUP : 0)
+                    | (p.revents & POLLERR ? MP_STREAM_POLL_ERR : 0)
+                    | (p.revents & POLLNVAL ? MP_STREAM_POLL_NVAL : 0);
+            }
+            return ret;
         }
         if (s->listening) {
             int st = tcp_state(s->handle);
@@ -781,7 +1058,19 @@ static MP_DEFINE_CONST_FUN_OBJ_2(socket_sendall_obj, socket_sendall);
 static mp_obj_t socket_recv(mp_obj_t self_in, mp_obj_t len_in) {
     socket_obj_t *s = MP_OBJ_TO_PTR(self_in);
     mp_int_t len = mp_obj_get_int(len_in);
-    if (IS_TCP(s) && !s->closed && s->handle >= 0 && !s->listening) {
+    if (s->mint && IS_TCP(s) && !s->closed && s->handle >= 0 && !s->listening) {
+        struct pollfd p = { s->handle, POLLIN, 0 };
+        if (poll(&p, 1, 0) <= 0) {
+            int e = mint_wait(s, POLLIN);
+            if (e) {
+                mp_raise_OSError(e);
+            }
+        }
+        mp_uint_t c = mint_pending(s->handle);
+        if (c > 0 && c < (mp_uint_t)len) {
+            len = c;
+        }
+    } else if (IS_TCP(s) && !s->mint && !s->closed && s->handle >= 0 && !s->listening) {
         // Allocate only what has arrived: recv(8192) for a few bytes would
         // otherwise feed the garbage collector, slow on a 68000.
         int err;
@@ -815,14 +1104,45 @@ static mp_obj_t socket_sendto(mp_obj_t self_in, mp_obj_t buf_in, mp_obj_t addr) 
     uint32_t rhost;
     uint16_t rport;
     parse_addr(addr, &rhost, &rport);
+    if (s->mint) {
+        mp_buffer_info_t bufinfo;
+        mp_get_buffer_raise(buf_in, &bufinfo, MP_BUFFER_READ);
+        struct sockaddr_in sa;
+        mint_sockaddr(&sa, rhost, rport);
+        int err;
+        mp_uint_t n = mint_write(s, bufinfo.buf, bufinfo.len, &sa, &err);
+        if (n == MP_STREAM_ERROR) {
+            mp_raise_OSError(err);
+        }
+        return mp_obj_new_int_from_uint(n);
+    }
     udp_open(s, rhost, rport);
     return socket_send(self_in, buf_in);
 }
 static MP_DEFINE_CONST_FUN_OBJ_3(socket_sendto_obj, socket_sendto);
 
+static mp_obj_t socket_getpeername(mp_obj_t self_in);
+
 static mp_obj_t socket_recvfrom(mp_obj_t self_in, mp_obj_t len_in) {
     socket_obj_t *s = MP_OBJ_TO_PTR(self_in);
     mp_obj_t t[2];
+    if (s->mint) {
+        sock_check_open(s);
+        mp_int_t len = mp_obj_get_int(len_in);
+        vstr_t vstr;
+        vstr_init_len(&vstr, len);
+        struct sockaddr_in sa;
+        int err;
+        mp_uint_t n = mint_read(s, vstr.buf, len, &sa, &err);
+        if (n == MP_STREAM_ERROR) {
+            vstr_clear(&vstr);
+            mp_raise_OSError(err);
+        }
+        vstr.len = n;
+        t[0] = mp_obj_new_bytes_from_vstr(&vstr);
+        t[1] = IS_TCP(s) ? socket_getpeername(self_in) : mint_addr_tuple(&sa);
+        return mp_obj_new_tuple(2, t);
+    }
     t[0] = socket_recv(self_in, len_in);
     cib_t *ci = handle_info(s->handle);
     t[1] = addr_tuple(ci->address.rhost, ci->address.rport);
@@ -855,10 +1175,51 @@ static mp_obj_t socket_setblocking(mp_obj_t self_in, mp_obj_t flag) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(socket_setblocking_obj, socket_setblocking);
 
-// SO_REUSEADDR and friends: STinG has no options to set; accepted and ignored.
+// Option numbers of this module (those of MicroPython's lwIP ports).
+#define MOD_SOL_SOCKET      1
+#define MOD_SO_REUSEADDR    4
+#define MOD_SO_BROADCAST    0x20
+#define MOD_IPPROTO_TCP     6
+#define MOD_TCP_NODELAY     1
+
+// MiNTnet: translated and passed on. STinG: only TCP_NODELAY means something
+// (STinG-LW v13), the others are accepted and ignored.
 static mp_obj_t socket_setsockopt(size_t n_args, const mp_obj_t *args) {
     (void)n_args;
-    (void)args;
+    socket_obj_t *s = MP_OBJ_TO_PTR(args[0]);
+    sock_check_open(s);
+    mp_int_t level = mp_obj_get_int(args[1]);
+    mp_int_t opt = mp_obj_get_int(args[2]);
+    bool nodelay = level == MOD_IPPROTO_TCP && opt == MOD_TCP_NODELAY;
+    if (!s->mint) {
+        if (nodelay && IS_TCP(s)) {
+            s->nodelay = mp_obj_is_true(args[3]);
+            sting_apply_nodelay(s);
+        }
+        return mp_const_none;
+    }
+    int val;
+    const void *ptr = &val;
+    socklen_t len = sizeof(val);
+    if (mp_obj_is_int(args[3])) {
+        val = mp_obj_get_int(args[3]);
+    } else {
+        mp_buffer_info_t bufinfo;
+        mp_get_buffer_raise(args[3], &bufinfo, MP_BUFFER_READ);
+        ptr = bufinfo.buf;
+        len = bufinfo.len;
+    }
+    if (level == MOD_SOL_SOCKET) {
+        level = SOL_SOCKET;
+        opt = opt == MOD_SO_REUSEADDR ? SO_REUSEADDR
+            : opt == MOD_SO_BROADCAST ? SO_BROADCAST : opt;
+    } else if (nodelay) {
+        level = IPPROTO_TCP;
+        opt = TCP_NODELAY;
+    }
+    if (setsockopt(s->handle, level, opt, ptr, len) < 0) {
+        mint_raise();
+    }
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(socket_setsockopt_obj, 4, 4, socket_setsockopt);
@@ -871,6 +1232,14 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(socket_makefile_obj, 1, 3, socket_mak
 
 static mp_obj_t socket_getsockname(mp_obj_t self_in) {
     socket_obj_t *s = MP_OBJ_TO_PTR(self_in);
+    if (s->mint && s->handle >= 0) {
+        struct sockaddr_in sa;
+        socklen_t n = sizeof(sa);
+        if (getsockname(s->handle, (struct sockaddr *)&sa, &n) < 0) {
+            mint_raise();
+        }
+        return mint_addr_tuple(&sa);
+    }
     if (s->handle >= 0) {
         cib_t *ci = handle_info(s->handle);
         return addr_tuple(ci->address.lhost, ci->address.lport);
@@ -883,6 +1252,14 @@ static mp_obj_t socket_getpeername(mp_obj_t self_in) {
     socket_obj_t *s = MP_OBJ_TO_PTR(self_in);
     if (s->handle < 0 || s->listening) {
         mp_raise_OSError(MP_ENOTCONN);
+    }
+    if (s->mint) {
+        struct sockaddr_in sa;
+        socklen_t n = sizeof(sa);
+        if (getpeername(s->handle, (struct sockaddr *)&sa, &n) < 0) {
+            mint_raise();
+        }
+        return mint_addr_tuple(&sa);
     }
     cib_t *ci = handle_info(s->handle);
     return addr_tuple(ci->address.rhost, ci->address.rport);
@@ -898,7 +1275,7 @@ static MP_DEFINE_CONST_FUN_OBJ_1(socket_close_obj, socket_close_meth);
 static void socket_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
     (void)kind;
     socket_obj_t *s = MP_OBJ_TO_PTR(self_in);
-    mp_printf(print, "<socket %s handle=%d>", IS_TCP(s) ? "tcp" : "udp", s->handle);
+    mp_printf(print, "<socket %s %s=%d>", IS_TCP(s) ? "tcp" : "udp", s->mint ? "fd" : "handle", s->handle);
 }
 
 static const mp_rom_map_elem_t socket_locals_dict_table[] = {
@@ -1006,6 +1383,14 @@ static mp_obj_t mod_sting(void) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(mod_sting_obj, mod_sting);
 
+// stack() -> 'MiNTnet', 'STinG' or None: the stack the sockets go through.
+static mp_obj_t mod_stack(void) {
+    int n = net_find();
+    return n == NET_MINT ? MP_OBJ_NEW_QSTR(MP_QSTR_MiNTnet)
+         : n == NET_STING ? MP_OBJ_NEW_QSTR(MP_QSTR_STinG) : mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(mod_stack_obj, mod_stack);
+
 static const mp_rom_map_elem_t mp_module_socket_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_socket) },
     { MP_ROM_QSTR(MP_QSTR_socket), MP_ROM_PTR(&socket_type) },
@@ -1013,13 +1398,16 @@ static const mp_rom_map_elem_t mp_module_socket_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_inet_pton), MP_ROM_PTR(&mod_inet_pton_obj) },
     { MP_ROM_QSTR(MP_QSTR_inet_ntop), MP_ROM_PTR(&mod_inet_ntop_obj) },
     { MP_ROM_QSTR(MP_QSTR_sting), MP_ROM_PTR(&mod_sting_obj) },
+    { MP_ROM_QSTR(MP_QSTR_stack), MP_ROM_PTR(&mod_stack_obj) },
     { MP_ROM_QSTR(MP_QSTR_AF_INET), MP_ROM_INT(MOD_AF_INET) },
     { MP_ROM_QSTR(MP_QSTR_SOCK_STREAM), MP_ROM_INT(MOD_SOCK_STREAM) },
     { MP_ROM_QSTR(MP_QSTR_SOCK_DGRAM), MP_ROM_INT(MOD_SOCK_DGRAM) },
-    { MP_ROM_QSTR(MP_QSTR_IPPROTO_TCP), MP_ROM_INT(6) },
+    { MP_ROM_QSTR(MP_QSTR_IPPROTO_TCP), MP_ROM_INT(MOD_IPPROTO_TCP) },
     { MP_ROM_QSTR(MP_QSTR_IPPROTO_UDP), MP_ROM_INT(17) },
-    { MP_ROM_QSTR(MP_QSTR_SOL_SOCKET), MP_ROM_INT(1) },
-    { MP_ROM_QSTR(MP_QSTR_SO_REUSEADDR), MP_ROM_INT(4) },
+    { MP_ROM_QSTR(MP_QSTR_SOL_SOCKET), MP_ROM_INT(MOD_SOL_SOCKET) },
+    { MP_ROM_QSTR(MP_QSTR_SO_REUSEADDR), MP_ROM_INT(MOD_SO_REUSEADDR) },
+    { MP_ROM_QSTR(MP_QSTR_SO_BROADCAST), MP_ROM_INT(MOD_SO_BROADCAST) },
+    { MP_ROM_QSTR(MP_QSTR_TCP_NODELAY), MP_ROM_INT(MOD_TCP_NODELAY) },
 };
 static MP_DEFINE_CONST_DICT(mp_module_socket_globals, mp_module_socket_globals_table);
 
